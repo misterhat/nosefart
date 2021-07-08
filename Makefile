@@ -2,8 +2,8 @@
 # Configuration
 
 CC = gcc
-CFLAGS = 
-LDFLAGS = -lm
+CFLAGS =
+LDFLAGS = -lm -lSDL2
 PREFIX = /usr
 WANT_DEBUG=TRUE
 
@@ -98,7 +98,7 @@ install: all
 
 uninstall:
 	rm -f $(PREFIX)/bin/$(NAME)
-clean: 
+clean:
 	rm -rf nsfobj
 
 
