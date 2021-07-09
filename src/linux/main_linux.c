@@ -11,16 +11,10 @@ UNIX systems */
 #include <string.h>
 #include <time.h>
 
-#include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <termios.h>
 #include <unistd.h>
-
-#include <sys/ioctl.h>
-#include <sys/soundcard.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #include "nsf.h"
 #include "types.h"
@@ -32,15 +26,10 @@ just including this is easier than trying to rip out just the relevant bits
 and nothing else. */
 #include <nsfinfo.h>
 
-/* for shared memory used in auto-time calc */
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-
 #ifndef bool
 #define bool boolean
 #endif
+
 #ifndef true
 #define true TRUE
 #endif
@@ -58,7 +47,6 @@ static int bufferSize;
 static unsigned char *buffer = 0, *bufferPos = 0;
 
 static int *plimit_frames = NULL;
-static int shm_id;
 
 static int frames; /* I like global variables too much */
 
@@ -84,88 +72,7 @@ static int get_time(int repetitions, char *filename, int track) {
     return wintro + (repetitions - 1) * wointro;
 }
 
-void cleanup(int sig) {
-    /* Clean up the shared memory. */
-    shmctl(shm_id, IPC_RMID, NULL);
-    shmdt(plimit_frames);
-
-    /* if the child, which doesn't know about the new or old terminal modes,
-    does this, it screws up the terminal. */
-    if (pid != 0)
-        tcsetattr(STDIN_FILENO, TCSANOW, &oldterm);
-
-    fprintf(stderr, "\n");
-
-    exit(0);
-}
-
-void dowait(int sig) { wait(&sig); /* sig is a throwaway */ }
-
-/* If all goes well, this spawns a child process that does the time
-calculation while letting the parent start playing the music.  When the
-child has the answer, it puts it in shared memory and exits.  If
-something goes wrong, it falls back to having the parent do the calculation. */
 void handle_auto_calc(char *filename, int track, int reps) {
-    /* When it's time to exit, the parent needs to know to clean up. */
-    /* I could exhaustively list signals that result in termination here,
-    but these are by far the most common. */
-    if (signal(SIGTERM, cleanup) == SIG_ERR ||
-        signal(SIGINT, cleanup) == SIG_ERR ||
-        signal(SIGHUP, cleanup) == SIG_ERR ||
-        signal(SIGUSR1, dowait) == SIG_ERR) {
-        fprintf(stderr, "Trouble setting signal handlers.\n");
-        exit(1);
-    }
-
-    /* Create the shared memory. */
-    shm_id = shmget(IPC_PRIVATE, 1, 0664 | IPC_CREAT | IPC_EXCL);
-    if (shm_id == -1) {
-        perror("Trouble with shared memory (1)");
-        fprintf(stderr, "Falling back to the slow approach...\n\n");
-        goto fallback;
-    }
-
-    /* Attach the shared memory to the current process' address space. */
-    plimit_frames = (int *)shmat(shm_id, (int *)0, 0);
-    if (plimit_frames == (int *)-1) {
-        perror("Trouble with shared memory (2)");
-        shmctl(shm_id, IPC_RMID, NULL);
-        fprintf(stderr, "Falling back to the slow approach...\n\n");
-        goto fallback;
-    }
-
-    /* 0 for unlimited until the time calculation returns */
-    *plimit_frames = 0;
-
-    pid = fork();
-    if (pid == -1) {
-        perror("fork failed");
-        fprintf(stderr, "Falling back to the slow approach...\n\n");
-        goto fallback;
-    }
-    /* the child does the auto-time calculation */
-    else if (pid == 0) {
-        *plimit_frames = get_time(reps, filename, track);
-
-        /* Clean up the shared memory. */
-        shmctl(shm_id, IPC_RMID, NULL);
-        shmdt(plimit_frames);
-
-        /* Hey!  wait() for me! */
-        /* Actually, just let the child be a zombie until the parent
-        finishes.  Making the parent wait() often makes the music skip */
-        /* I could insert a sleep(100000) here to prevent people from
-        saying "What's with this zombie thing?!?", but that wastes
-        memory */
-        // kill(getppid(), SIGUSR1);
-
-        exit(0);
-    }
-
-    /* meanwhile, the parent moves on and starts playing music */
-    return;
-
-fallback:
     *plimit_frames = get_time(reps, filename, track);
 }
 
@@ -199,12 +106,12 @@ static void init_sdl(void) {
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
         fprintf(stderr, "SDL_OpenAudio(): %s\n", SDL_GetError());
-        return 1;
+        exit(1);
     }
 
     SDL_PauseAudio(0);
 
-    bufferSize = 16384;
+    bufferSize = ((freq * bits) / 8) / 2;
     buffer = malloc((bufferSize / dataSize + 1) * dataSize);
     bufferPos = buffer;
     memset(buffer, 0, bufferSize);
@@ -237,6 +144,7 @@ static void show_help(void) {
     printf("\t-i\tJust print file information and exit\n");
     printf("\t-x\tStart with track x disabled (1 <= x <= 6)\n");
     printf("\nPlease send bug reports to quadong@users.sf.net\n");
+
     exit(0);
 }
 
@@ -260,14 +168,10 @@ static void show_info(void) {
 
 static void printsonginfo(int current_frame, int total_frames, int limited) {
     /*Why not printf directly?  Our termios hijinks for input kills the output*/
-    char *hi = (char *)malloc(255);
-    char blank[82];
-    memset(blank, ' ', 80);
-    blank[80] = '\r';
-    blank[81] = '\0';
+    char *ui = (char *)malloc(255);
 
     snprintf(
-        hi, 254,
+        ui, 254,
         total_frames != 0
             ? "Playing track %d/%d, channels %c%c%c%c%c%c, %d/%d sec, %d/%d "
               "frames\r"
@@ -286,20 +190,27 @@ static void printsonginfo(int current_frame, int total_frames, int limited) {
             1), /* this is something of an estimate */
         current_frame, total_frames);
 
-    if (!(current_frame % 10))
-        write(STDOUT_FILENO, (void *)blank, strlen(blank));
+    if (!(current_frame % 10)) {
+        char blank[82];
+        memset(blank, ' ', 80);
+        blank[80] = '\r';
+        blank[81] = '\0';
 
-    write(STDOUT_FILENO, (void *)hi, strlen(hi));
-    free(hi);
+        write(STDOUT_FILENO, (void *)blank, strlen(blank));
+    }
+
+    write(STDOUT_FILENO, (void *)ui, strlen(ui));
+    free(ui);
 }
 
 static void sync_channels(void) {
-    int channel;
     /* this is going to get run when a track starts and all channels start out
        enabled, so just turn off the right ones */
-    for (channel = 0; channel < 6; channel++)
-        if (!enabled[channel])
+    for (int channel = 0; channel < 6; channel++) {
+        if (!enabled[channel]) {
             nsf_setchan(nsf, channel, enabled[channel]);
+        }
+    }
 }
 
 /* start track, display which it is, and what channels are enabled */
@@ -307,6 +218,7 @@ static void nsf_setupsong(void) {
     printsonginfo(0, 0, 0);
     nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
     sync_channels();
+
     return;
 }
 
@@ -324,8 +236,6 @@ static void nsf_displayinfo(void) {
     printf("Artist:          %s\n", nsf->artist_name);
     printf("Copyright:       %s\n", nsf->copyright);
     printf("Number of Songs: %d\n\n", nsf->num_songs);
-
-    fflush(stdout); /* needed for gnosefart */
 }
 
 /* handle keypresses */
@@ -336,31 +246,31 @@ static int nsf_handlekey(char ch, int doautocalc, char *filename, int reps) {
     case 27: /* escape */
         return 1;
     case 'x':
-        /* wrapping around added by Matthew Strait */
-        if (nsf->current_song == nsf->num_songs)
+        if (nsf->current_song == nsf->num_songs) {
             nsf->current_song = 1;
-        else
+        } else {
             nsf->current_song++;
+        }
+
         nsf_setupsong();
         frames = 0;
+
         if (doautocalc) {
-            int foo;
-            /* clean up previous calculation */
-            wait(&foo); /* ch is a throwaway */
             handle_auto_calc(filename, nsf->current_song, reps);
         }
+
         break;
     case 'z':
-        if (1 == nsf->current_song)
+        if (nsf->current_song == 1) {
             nsf->current_song = nsf->num_songs;
-        else
+        } else {
             nsf->current_song--;
+        }
+
         nsf_setupsong();
         frames = 0;
+
         if (doautocalc) {
-            int foo;
-            /* clean up previous calculation */
-            wait(&foo); /* ch is a throwaway */
             handle_auto_calc(filename, nsf->current_song, reps);
         }
         break;
@@ -376,11 +286,9 @@ static int nsf_handlekey(char ch, int doautocalc, char *filename, int reps) {
     case '6':
         enabled[ch - '1'] = !enabled[ch - '1'];
         nsf_setchan(nsf, ch - '1', enabled[ch - '1']);
-        //      printsonginfo(0, 0, 0);
-        break;
-    default:
         break;
     }
+
     return 0;
 }
 
@@ -400,7 +308,6 @@ static int load_nsf_file(char *filename) {
 static void setup_term() {
     struct termios term;
 
-    /* UI settings */
     tcgetattr(STDIN_FILENO, &term);
     oldterm = term;
     term.c_lflag &= ~ICANON;
@@ -410,7 +317,6 @@ static void setup_term() {
     fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK);
 }
 
-/* Make some noise, run the show */
 static void play(char *filename, int track, int doautocalc, int reps,
                  int starting_frame, int limited) {
     int done = 0;
@@ -435,7 +341,6 @@ static void play(char *filename, int track, int doautocalc, int reps,
 
     while (!done) {
         char ch;
-        int foo;
 
         nsf_frame(nsf);
         frames++;
@@ -453,7 +358,12 @@ static void play(char *filename, int track, int doautocalc, int reps,
         if (bufferPos >= buffer + bufferSize) {
             if (frames >= starting_frame) {
                 SDL_QueueAudio(1, buffer, bufferPos - buffer);
-                SDL_Delay(SDL_GetQueuedAudioSize(1) / 1024 * 10);
+
+                float bytesPerSecond = (freq * bits) / 8;
+
+                SDL_Delay(
+                    ((int)(SDL_GetQueuedAudioSize(1) / bytesPerSecond * 1000)) /
+                    2);
             }
 
             bufferPos = buffer;
@@ -478,7 +388,6 @@ static void close_nsf_file(void) {
     nsf = 0;
 }
 
-/* HAS ROOT PERMISSIONS -- BE CAREFUL */
 int main(int argc, char **argv) {
     char *filename;
     int track = 1;
@@ -489,7 +398,6 @@ int main(int argc, char **argv) {
     int limited = 0;
     float speed_multiplier = 1;
 
-    /* parse options */
     const char *opts = "123456hvi:t:f:B:s:l:r:b:a:";
 
     plimit_frames = (int *)malloc(sizeof(int));
@@ -573,16 +481,18 @@ int main(int argc, char **argv) {
     } else {
         init_sdl();
 
-        if (limit_time != 0)
+        if (limit_time != 0) {
             *plimit_frames = limit_time * nsf->playback_rate;
+        }
 
         play(filename, track, doautocalc, reps, starting_frame, limited);
     }
 
     close_nsf_file();
 
-    if (!justdisplayinfo)
+    if (!justdisplayinfo) {
         close_sdl();
+    }
 
     return 0;
 }
