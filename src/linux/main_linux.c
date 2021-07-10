@@ -11,9 +11,7 @@ UNIX systems */
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <termios.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "config.h"
@@ -323,7 +321,6 @@ static void setup_term() {
 static void play(char *filename, int track, int doautocalc, int reps,
                  int starting_frame, int limited) {
     int done = 0;
-    int starting_time = time(NULL) - 1; /* the 1 helps with rounding error */
     frames = 0;
 
     /* determine which track to play */
@@ -441,13 +438,11 @@ static void dump(char* filename, char *dumpname, int track) {
 
         if (frames >= 50 && frames >= *plimit_frames) {
             done = 1;
-            printf ("%d\n", frames);
         }
     }
 
     fseek(wavFile, 40, SEEK_SET);
     fwrite(&size, sizeof(uint32), 1, wavFile);
-    printf("%d\n", size);
 
     fseek(wavFile, 4, SEEK_SET);
     size += 36;

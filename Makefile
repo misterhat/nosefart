@@ -1,4 +1,4 @@
-CC = gcc
+CC = clang
 CFLAGS =
 LDFLAGS = -lm -lSDL2
 PREFIX = /usr
@@ -56,7 +56,7 @@ all: $(ALL_TARGETS)
 $(BUILDDIR):
 	mkdir -p $(sort $(dir $(ALL_OBJECTS)))
 
-$(BUILDTOP)/config.h: $(BUILDDIR) Makefile
+$(BUILDTOP)/config.h: $(BUILDDIR)
 	echo "[$@]"
 	echo "#define VERSION \"$(VERSION)\"" > $@
 	echo "#define NAME \"$(NAME)\"" >> $@
@@ -76,14 +76,10 @@ uninstall:
 clean:
 	rm -rf nsfobj
 
-$(BUILDTOP)/$(NAME): $(OBJECTS)  $(BUILDTOP)/config.h
+$(BUILDTOP)/$(NAME): $(OBJECTS)
 	mkdir -p $(sort $(dir $(ALL_OBJECTS)))
 	$(CC) $(NSFINFO_CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(BUILDTOP)/config.h
 	mkdir -p $(sort $(dir $(ALL_OBJECTS)))
 	$(CC)  $(NSFINFO_CFLAGS) -o $@ -c $<
-
-$(BUILDDIR)/%-acc.o: $(SRCDIR)/%.c  $(BUILDTOP)/config.h
-	mkdir -p $(sort $(dir $(ALL_OBJECTS)))
-	$(CC) $(NSFINFO_CFLAGS) -o $@ -c $<
