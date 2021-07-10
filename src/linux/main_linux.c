@@ -3,23 +3,22 @@
 UNIX systems */
 
 #include <SDL2/SDL.h>
-
 #include <ctype.h>
+#include <fcntl.h>
+#include <getopt.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-
-#include <fcntl.h>
-#include <getopt.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
+#include "config.h"
 #include "nsf.h"
 #include "types.h"
-
-#include "config.h"
 
 /* for auto-time calculation.  We ignore most of the stuff in there, but I
 just including this is easier than trying to rip out just the relevant bits
@@ -38,8 +37,8 @@ and nothing else. */
 static nsf_t *nsf = 0;
 
 /* thank you, nsf_playtrack, for making me pass freq and bits to you */
-static int freq = 44100;
-static int bits = 8;
+static uint32 freq = 44100;
+static uint16 bits = 8;
 
 /* sound */
 static int dataSize;
@@ -95,8 +94,6 @@ static void init_sdl(void) {
         exit(1);
     }
 
-    dataSize = freq / nsf->playback_rate * (bits / 8);
-
     wanted.freq = freq;
     wanted.format = format;
     wanted.channels = 1;
@@ -110,7 +107,10 @@ static void init_sdl(void) {
     }
 
     SDL_PauseAudio(0);
+}
 
+static void init_buffer() {
+    dataSize = freq / nsf->playback_rate * (bits / 8);
     bufferSize = ((freq * bits) / 8) / 2;
     buffer = malloc((bufferSize / dataSize + 1) * dataSize);
     bufferPos = buffer;
@@ -142,7 +142,7 @@ static void show_help(void) {
     printf("\t-a x\tCalculate song length and play x repetitions (0 = intro "
            "only)\n");
     printf("\t-i\tJust print file information and exit\n");
-    printf("\t-x\tStart with track x disabled (1 <= x <= 6)\n");
+    printf("\t-x\tStart with channel x disabled (-123456)\n");
     printf("\nPlease send bug reports to quadong@users.sf.net\n");
 
     exit(0);
@@ -196,6 +196,7 @@ static void printsonginfo(int current_frame, int total_frames, int limited) {
         blank[80] = '\r';
         blank[81] = '\0';
 
+        // TODO remove strlen
         write(STDOUT_FILENO, (void *)blank, strlen(blank));
     }
 
@@ -214,7 +215,7 @@ static void sync_channels(void) {
 }
 
 /* start track, display which it is, and what channels are enabled */
-static void nsf_setupsong(void) {
+static void nsf_setupsong() {
     printsonginfo(0, 0, 0);
     nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
     sync_channels();
@@ -236,6 +237,8 @@ static void nsf_displayinfo(void) {
     printf("Artist:          %s\n", nsf->artist_name);
     printf("Copyright:       %s\n", nsf->copyright);
     printf("Number of Songs: %d\n\n", nsf->num_songs);
+
+    fflush(stdout);
 }
 
 /* handle keypresses */
@@ -382,6 +385,76 @@ static void play(char *filename, int track, int doautocalc, int reps,
     fprintf(stderr, "\n");
 }
 
+static void dump(char* filename, char *dumpname, int track) {
+    memset(buffer, 0, bufferSize);
+
+    int done = 0;
+    frames = 0;
+
+    FILE *wavFile = fopen(dumpname, "wb");
+
+    fwrite("RIFF", 4, 1, wavFile);
+
+    uint32 size = 0;
+    fwrite(&size, sizeof(uint32), 1, wavFile);
+
+    fwrite("WAVEfmt ", 8, 1, wavFile);
+
+    uint32 headerSize = 16;
+    fwrite(&headerSize, sizeof(uint32), 1, wavFile);
+
+    uint16 type = 1;
+    fwrite(&type, sizeof(uint16), 1, wavFile);
+
+    uint16 channels = 1;
+    fwrite(&channels, sizeof(uint16), 1, wavFile);
+
+    fwrite(&freq, sizeof(uint32), 1, wavFile);
+
+    uint32 bytesPerSecond = (freq * bits) / 8;
+    fwrite(&bytesPerSecond, sizeof(uint32), 1, wavFile);
+
+    uint16 blockAlign = (freq / 8);
+    fwrite(&blockAlign, sizeof(uint16), 1, wavFile);
+
+    fwrite(&bits, sizeof(uint16), 1, wavFile);
+
+    fwrite("data", 4, 1, wavFile);
+    fwrite(&size, sizeof(uint32), 1, wavFile);
+
+    handle_auto_calc(filename, nsf->current_song, 1);
+    nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
+    sync_channels();
+
+    while (!done) {
+        nsf_frame(nsf);
+        frames++;
+        apu_process(bufferPos, dataSize / (bits / 8));
+        bufferPos += dataSize;
+
+        if (bufferPos >= buffer + bufferSize) {
+            fwrite(buffer, 1, bufferPos - buffer, wavFile);
+            size += bufferPos - buffer;
+            bufferPos = buffer;
+        }
+
+        if (frames >= 50 && frames >= *plimit_frames) {
+            done = 1;
+            printf ("%d\n", frames);
+        }
+    }
+
+    fseek(wavFile, 40, SEEK_SET);
+    fwrite(&size, sizeof(uint32), 1, wavFile);
+    printf("%d\n", size);
+
+    fseek(wavFile, 4, SEEK_SET);
+    size += 36;
+    fwrite(&size, sizeof(uint32), 1, wavFile);
+
+    fclose(wavFile);
+}
+
 /* free what we've allocated */
 static void close_nsf_file(void) {
     nsf_free(&nsf);
@@ -390,26 +463,34 @@ static void close_nsf_file(void) {
 
 int main(int argc, char **argv) {
     char *filename;
+    char *dumpwavdir;
     int track = 1;
     int done = 0;
     int justdisplayinfo = 0;
+    int dumpwav = 0;
     int doautocalc = 0;
     int reps = 0, limit_time = 0, starting_frame = 0;
     int limited = 0;
     float speed_multiplier = 1;
 
-    const char *opts = "123456hvi:t:f:B:s:l:r:b:a:";
+    const char *opts = "123456hvit:f:B:s:l:r:b:a:o:";
 
     plimit_frames = (int *)malloc(sizeof(int));
     plimit_frames[0] = 0;
 
     while (!done) {
         char c;
+
         switch (c = getopt(argc, argv, opts)) {
         case EOF:
             done = 1;
             break;
-        case '1' ... '6':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
             enabled[(int)(c - '0' - 1)] = 0;
             break;
         case 'v':
@@ -446,6 +527,10 @@ int main(int argc, char **argv) {
             limited = 1;
             reps = atoi(optarg);
             break;
+        case 'o':
+            dumpwav = 1;
+            dumpwavdir = optarg;
+            break;
         case 'h':
         case ':':
         case '?':
@@ -478,7 +563,23 @@ int main(int argc, char **argv) {
 
     if (justdisplayinfo) {
         nsf_displayinfo();
+    } else if (dumpwav) {
+        init_buffer();
+
+        mkdir(dumpwavdir, 0777);
+
+        for (int track = 1; track < nsf->num_songs; track++) {
+            nsf->current_song = track;
+
+            char* dumpname = malloc(strlen(dumpwavdir) + 9);
+            sprintf(dumpname, "%s/%d.wav", dumpwavdir, nsf->current_song);
+            printf("%s\n", dumpname);
+            dump(filename, dumpname, track);
+
+            free(dumpname);
+        }
     } else {
+        init_buffer();
         init_sdl();
 
         if (limit_time != 0) {
@@ -490,7 +591,7 @@ int main(int argc, char **argv) {
 
     close_nsf_file();
 
-    if (!justdisplayinfo) {
+    if (!justdisplayinfo && !dumpwav) {
         close_sdl();
     }
 

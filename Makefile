@@ -1,19 +1,11 @@
-################################
-# Configuration
-
 CC = gcc
 CFLAGS =
 LDFLAGS = -lm -lSDL2
 PREFIX = /usr
 WANT_DEBUG=TRUE
 
-# nothing below here should need to be changed
-
-################################
-# Acting on the configuration
-
 NAME = nosefart
-VERSION = 2.8-mls
+VERSION = 3.0.0
 
 BUILDTOP = nsfobj
 BUILDDIR = $(BUILDTOP)/build
@@ -39,9 +31,6 @@ CFLAGS +=\
 
 NSFINFO_CFLAGS = $(CFLAGS) -DNES6502_MEM_ACCESS_CTRL
 
-################################
-# Here's where the directory tree gets ugly
-
 FILES =\
  log\
  memguard\
@@ -60,21 +49,12 @@ SOURCES = $(addprefix $(SRCDIR)/, $(SRCS))
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SOURCES))
 
 ALL_OBJECTS = $(OBJECTS)
-
 ALL_TARGETS = $(BUILDTOP)/$(NAME)
-
-################################
-# Rules
 
 all: $(ALL_TARGETS)
 
-################################
-# Support
-
 $(BUILDDIR):
 	mkdir -p $(sort $(dir $(ALL_OBJECTS)))
-#	-mkdir -p $(BUILDDIR)/cpu/nes6502 $(BUILDDIR)/machine $(BUILDDIR)/sndhrdw $(BUILDDIR)/linux  $(BUILDDIR)/nsfinfo
-
 
 $(BUILDTOP)/config.h: $(BUILDDIR) Makefile
 	echo "[$@]"
@@ -89,21 +69,12 @@ $(BUILDDIR)/dep: $(BUILDTOP)/config.h
 install: all
 	mkdir -p $(PREFIX)/bin
 	cp $(ALL_TARGETS) $(PREFIX)/bin
-	@echo "-----------------------------------------------"
-	@echo "Be sure to run chmod +s $(PREFIX)/bin/$(NAME) if you want ordinary users"
-	@echo "to be able to use /dev/dsp.  SUID isn't necessary, though, if you want to"
-	@echo "run $(NAME) with a wrapper, like artsdsp from arts or esddsp from esound."
-	@echo "-----------------------------------------------"
-	@echo "Also, make sure that $(PREFIX)/bin is in your PATH."
 
 uninstall:
 	rm -f $(PREFIX)/bin/$(NAME)
+
 clean:
 	rm -rf nsfobj
-
-
-################################
-# The real heavy lifting
 
 $(BUILDTOP)/$(NAME): $(OBJECTS)  $(BUILDTOP)/config.h
 	mkdir -p $(sort $(dir $(ALL_OBJECTS)))
