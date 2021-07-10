@@ -390,6 +390,7 @@ static void dump(char* filename, char *dumpname, int track) {
 
     int done = 0;
     frames = 0;
+    bufferPos = buffer;
 
     FILE *wavFile = fopen(dumpname, "wb");
 
