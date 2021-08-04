@@ -1,4 +1,4 @@
-CC = clang
+CC = gcc
 CFLAGS =
 LDFLAGS = -lm -lSDL2
 PREFIX = /usr

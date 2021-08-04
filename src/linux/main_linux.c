@@ -131,7 +131,7 @@ static void show_help(void) {
     printf("\t-h  \tHelp\n");
     printf("\t-v  \tVersion information\n");
     printf("\n\t-t x\tStart playing track x (default: 1)\n");
-    printf("\t-s x\tPlay at x times the normal speed.\n");
+    printf("\t-s x\tPlay at x times the normal speed\n");
     printf("\t-f x\tUse x sampling rate (default: 44100)\n");
     printf("\t-B x\tUse sample size of x bits (default: 8)\n");
     printf("\t-l x\tLimit total playing time to x seconds (0 = unlimited)\n");
@@ -141,6 +141,7 @@ static void show_help(void) {
            "only)\n");
     printf("\t-i\tJust print file information and exit\n");
     printf("\t-x\tStart with channel x disabled (-123456)\n");
+    printf("\t-o x\tOutput WAV files to directory x\n\n");
     printf("\nPlease send bug reports to quadong@users.sf.net\n");
 
     exit(0);
@@ -193,9 +194,7 @@ static void printsonginfo(int current_frame, int total_frames, int limited) {
         memset(blank, ' ', 80);
         blank[80] = '\r';
         blank[81] = '\0';
-
-        // TODO remove strlen
-        write(STDOUT_FILENO, (void *)blank, strlen(blank));
+        write(STDOUT_FILENO, (void *)blank, 81);
     }
 
     write(STDOUT_FILENO, (void *)ui, strlen(ui));
@@ -564,13 +563,14 @@ int main(int argc, char **argv) {
 
         mkdir(dumpwavdir, 0777);
 
-        for (int track = 1; track < nsf->num_songs; track++) {
-            nsf->current_song = track;
+        for (int i = track; i < nsf->num_songs; i++) {
+            nsf->current_song = i;
 
+            // 3 digits, WAV extension, slash, dot and NULL
             char* dumpname = malloc(strlen(dumpwavdir) + 9);
             sprintf(dumpname, "%s/%d.wav", dumpwavdir, nsf->current_song);
-            printf("%s\n", dumpname);
-            dump(filename, dumpname, track);
+
+            dump(filename, dumpname, i);
 
             free(dumpname);
         }

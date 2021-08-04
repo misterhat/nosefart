@@ -1,0 +1,1224 @@
+NES Music Ripping Guide
+Version 1.4, May 30, 2000
+--------------------------
+Written by Chris Covell (ccovell@direct.ca), with help from Kevin Horton and
+Michel Iwaniec (among others).
+
+
+Contents
+--------
+1. Introduction
+2. Early Basics
+3. Getting Started
+ i. Useful Tools
+4. Spotting Music Code
+ i. Using a HEX Editor
+ ii. Using an Emulator
+5. Post-Rip Cleanup
+ i. Testing the Ripped Data
+ ii. Arranging Songs
+ iii. Ripping/Relocating Samples.
+6. NSF Guidelines
+7. Conclusion
+8. Appendix
+ i. The NESM/.NSF Format
+ ii. Example 6502 ASM Player
+
+
+1. Introduction
+---------------
+
+I have been asked to write up a guide on how to rip NES music for use in "NSF"
+players, which play NES music in Kevin Horton's NESM file format.
+Although I am not an expert by any means in music ripping, I have enough
+knowledge to rip the easy stuff...  And to get other people started.  Kevin is
+the one who got me started, so I am using his ideas (and some of his e-mails)
+as a resource.
+
+
+2. Early Basics
+---------------
+
+First of all, if you want to rip NES music, it is important to know several
+things.  The most crucial is that you have a knowledge of 6502 assembly
+language.  Get that down and memorized first.  It may also be a good idea to
+become familiar with the HEX opcodes for the 6502, as well as the number of
+bytes taken up by each opcode.  Next, learn hexadecimal notation, if you don't
+know it yet.
+
+Secondly, study the architecture of the NES/Famicom.  There are several
+documents on this available on the Internet.  You should become familiar with
+how the NES handles interrupts, NMI, writes to various memory areas, system
+vectors, and such.  Become familiar especially with the sound registers
+located at $4000-$4015, with the exception of $4014, which is for sprites, and
+not sound.
+
+
+3. Getting Started
+------------------
+
+To begin ripping NES music, it's a good idea to have both the physical NES
+cartridge and a ROM file of it.  Not only is this a good idea for legal
+reasons, but the "real thing" is your control system.  It's where the NES game
+will behave exactly as it was designed.  Unfortunately, no emulator is
+perfect.
+
+
+ i. Useful Tools
+ ----------------
+
+Having many emulators for your specific computer(s) is very useful.  They all
+behave differently with different ROMs, so knowing each emulator's strengths
+and weaknesses is good.  Here is what I have going on my computers (I rip and
+assemble NES music and demos on my Amiga)
+
+Amiga: A/NES: Good for fast NTSC emulation, and somewhat more compatible. 
+              Displays NES vectors.  Good for listening to the DPCM samples
+              REALLLY LOUD. :-)
+       CoolNESs: Better sound than A/NES.
+
+MacOS: GrayBox: Great for viewing areas in memory while a game is running,
+                even areas in memory which are supposed to be "write-only".
+                Ideal for spotting writes to the sound registers and
+                especially to the DPCM registers.
+
+PC:    Nesticle: Not the most compatible, but very useful for tracing through
+                 a game, and dumping the active NES memory to a file.
+       FWNES: Useful also for searching through memory, also more compatible
+              with games.
+       LoopyNES: Very accurate NES emulation, and it has NSF playing built-in.
+
+It is also useful for whatever computer you use to have a HEX editor, a 6502
+disassembler, a split/join utility like cat or join, and perhaps even a 6502
+assembler.  A good stereo system for listening for errors in sound, and lots
+of time and patience are also useful.
+
+If you are successful at ripping music, you might want to get a program that
+searches for relative text, in order to search for the music composer's
+credits in the game ROM.  This is if you don't know the composer's name
+off-hand, and don't want to have to play through the game just to see the
+composer's name in the ending credits.  A program called Hexposure exists for
+DOS, and I have made a program called ROMSearcher which is written in C++. 
+Binaries of it exist for DOS, Windows, Linux, and AmigaOS.
+
+
+4. Spotting Music Code
+----------------------
+
+Okay, we're starting.  Most NES music accesses its music-routines in a logical
+way, by first JSRing to an INIT subroutine, which sets up areas in memory and
+sets a song going.  Next, every VBlank, the game JSRs to its PLAY subroutine,
+which keeps updating the audio hardware, making music.  So: INIT once to start
+music, PLAY many times to play the music.  Some games behave in a nonstandard
+way, such as not having an INIT subroutine to speak of, etc...  You will have
+to deal with these yourself.
+
+
+ i. Using a HEX Editor
+ ---------------------
+
+Sometimes, you don't even need an emulator to spot the music code.  First,
+load up the game ROM in a HEX editor, and search for a write to the NES' sound
+address space.  Generally, I do a search for $8D$15$40, which is "STA $4015"
+in ASM speak.  Usually these writes will turn on or off the sound channels,
+which is a good indicator of code which is part of the INIT routine.  Now the
+tough part is to trace through the code to figure out where the INIT
+subroutine actually begins.
+
+If you are using a HEX editor, you should take note of the way many NES games
+are laid out in a ROM.  In games that have more than 32k of game code, mappers
+are used to swap in portions of code.  Often, the music code stays in memory
+all the time, while game code gets swapped in.  Sometimes, the music code is
+enmeshed in the game code, and so it will be your job to separate that.
+
+But anyhow, let's imagine that there is a game which is larger than 32k, and
+it has its music code in memory at all times.  Usually, the music code resides
+in the $8000-$BFFF region, and the game code is swapped in the $C000-$FFFF
+region.  This means that you may have to inspect each 16k section in the game
+ROM for music code.  First, get rid of the NES header so that the addresses
+align correctly.
+
+If you search for that write to $4015 in a HEX editor, and a search pops up,
+keep searching.  It may not be the only write, and it may not even be limited
+to a 16k chunk of memory.  (There may be several 16k chunks of music code in a
+game, like what Kevin encountered when ripping Kirby's Adventure and Metal
+Gear 2.)  If a search pops up very close to a 16k offset in the ROM file, like
+at $0000, $4000, $8000, $C000, $10000, $14000, etc.. then you're quite in
+luck.  Chances are that the music code begins very close to the start of that
+16k section.  Copy out that entire 16k chunk of the ROM into another file.  I
+usually call that "*.mus".
+
+So you now have what is most likely the music code for a particular game.  You
+may want to search through that file for the likely starting point of the INIT
+routine, or disassemble the chunk of code (with ORIGIN $8000 or whatever) and
+trace through it for the INIT and even PLAY routines, if you wish.  That may
+be enough, but if not, it might be a good idea to search through the game code
+of the ROM for calls to the INIT or PLAY routines.  Generally, the PLAY
+routine is called in the middle of a game's NMI code.  The vector for the NMI
+routine is located at $FFFA-$FFFB in the NES memory, and is generally the 6th
+and 5th to the last bytes before a 16k offset in game code.  This NMI routine
+should point to some place in the $C000-$FFFF region of memory, but some games
+do point to weird places, like $0700, or $6000, or even somewhere after $8000.
+
+When you have found what you think is the NMI vector, go to the location in
+the file addressed by the vector.  If the potential NMI code starts out with
+stuff like "PHA, TXA, PHA, TYA, PHA, etc.." it is probably the beginning of
+the NMI code.  Now, somewhere in the NMI code, the game should JSR to a
+subroutine which is the PLAY code.  Look for a JSR to $8000, or $80xx.  It is
+pretty tell-tale when a game which is greater than 32k jumps to a subroutine
+which is beyond a 16k boundary.  You know that you have found the PLAY code
+when the subroutine in this memory region which the NMI code calls does a
+bunch of saves to $4000-$4013, or calls other subroutines which save to
+$4000-$4013.
+
+Next, to find the INIT code, well, that is more difficult.  Use what you found
+when you did the search for "STA $4015" to help you.  Try to trace backwards
+through the music code for possible entry-points into an INIT routine. 
+Usually, they will directly follow an RTS instruction, or opcode $60. 
+Sometimes when I'm stumped, I just try out all the points in the music code
+that follow an RTS.  You can also trace through the game code for calls to
+this elusive INIT routine; the calls for it might be in the NMI routine, or
+even in the RESET routine, pointed to by $FFFC-$FFFD in the NES' memory, which
+is just after the NMI vector.  Trace, trace, trace; that's all you can do.
+
+Let's just say that the best-case scenario is many Capcom and Sunsoft games. 
+They have their music code at $8000-$BFFF, their INIT routine is at $8003, and
+the PLAY routine is at $8000.  Couldn't be simpler.  Of course, there are many
+exceptions.  Using an emulator can help out with those...
+
+
+ ii. Using an Emulator
+ ---------------------
+
+Here is what Kevin has to say about using an emulator:
+
+*BEGIN QUOTE*
+
+I have used the following method to rip stuff very effectively:
+(assuming NESticle here)
+
+1) start up the victim, earm, game.
+
+2) pause it. [pause emulation; don't just press "start"]
+
+3) go into debug and hit "VBI" [it's "Vint" in Nesticle]
+
+4) keep hitting control-T to trace the code until you see a tell-tale write.
+
+5) go back into debug and hit "save RAM"
+
+Now, you've got a conveniently extracted chunk of code in the correct space in
+memory and everything.  Lop off the lower 32K and keep the upper 32K.  This
+should be a complete rip of the music.  Now you've got a much smaller chunk
+of code to peruse thru.  Also remember to write down the address that was
+called to the sound area. (note this may take a few goes... don't be afraid to
+re-run the code to find it)  This will only tell you the play address of the
+tune.  However you can sort of deduce what the init address will be.  Note
+that some tunes do not have an init address! 
+
+For these, the tune# is stored in a memory location and the player code checks
+to see if it's changed, and if so it will load up the proper tune, etc. 
+Others may need to have you store the tune # into a memory location and then
+call an init routine.
+
+I've seen all three and they are about equally common.
+
+*END QUOTE*
+
+Remember that in NESticle you can view the messages in a scrolling window. 
+Use this for easier viewing of all the instructions while you trace.  Also
+note that after an RTI in the NMI code, it is a LONG time to wait until the
+next NMI, so trigger it yourself.
+
+If you don't have a PC or NESticle, you can still use an emulator perhaps to
+dump the active RAM, to trace opcodes, to trap writes to $4000-$4015, or to
+view the NMI, RESET, and IRQ/BRK vectors.
+
+
+5. Post-Rip Cleanup
+-------------------
+
+After you have extracted a chunk of memory which you believe contains music
+code, and you have a good idea of the LOAD, INIT, and PLAY addresses, you
+should test it out to see if it is a good rip.  This stage is often annoying,
+because the correct selection of INIT and PLAY addresses can mean the
+difference between NES music and silence.  And silence does not help you in
+finding out what exactly is wrong.
+
+
+ i. Testing the Ripped Data
+ --------------------------
+
+There are currently two ways of playing back music ripped from NES games: in
+an NES ROM, or in a .NSF file.  In the appendix at the bottom of this
+document, you will find assembly source code for the NES player, and a
+description of the .NSF header format.
+
+To use your rip in the NES file, you need to assemble the included source code
+into a 6502 code stub, and place the ripped music data where it is supposed to
+be in the NES ROM.  First off, the source code is formatted for use with the
+cross-platform cross-assembler "DASM" (but it can be easily converted to other
+styles), and it has some constants which you must set up for the 6502 to JSR
+to the right locations.  Be sure to define the INIT address, the PLAY address,
+and the maximum number of songs (defaults to $FF for now) to be played.  This
+last constant starts at 1, not 0.  So, if there are 5 songs in the music data,
+this constant reads 5.  The start song is also definable, but you will usually
+want to keep this at 0 (see ii. for the reason why).
+
+Setting up the ORIGIN of the player code is important.  With most rips with a
+load address of $8000 and a filesize of 16384 ($4000) bytes, the origin of the
+player code is $C000.  If you have less data in the music code, or more data
+due to an initialization table or samples (see ii. and iii.) you will need to
+adjust the origin to compensate for this loss or addition of data.  The key is
+to make sure that the music code and assembled player code add up to 32768
+bytes.
+
+After you assemble the player sourcecode, you will need to make a standard
+iNES header (Mapper 0, 2 PRG segments, 0 CHR segments), and append to it the
+ripped music data, and then the binary of the assembled player code.  Load up
+the NES ROM into an emulator, and try out the music.  Press "start" to advance
+the songs.  If the NES crashes upon playing a certain song (and not at the
+beginning of the ROM), it usually means that it is trying to play an invalid
+song (it is pointing to a non-existent song).  In the assembler code, change
+the starting song constant to see if there are more valid songs after that
+invalid song.
+
+The other way to test out the ripped music data is to prepend to the data a
+NESM/.NSF header, and try it out in NEZAmp or other NSF players.  The NSF
+header format is described in the appendix at the bottom of this document. 
+The constants like LOAD, INIT, and PLAY address, etc, are self-explanatory. 
+When you have successfully ripped a song and have made a working NSF file, be
+sure to fill in the relevant Title, Composer, and Copyright fields.  Don't be
+too lazy or impatient to credit the composer and companies that made that
+great music!  Keep reading!  Don't be lazy like some of the lazy rippers out
+there!  Lazy lazy lazy lazy lazy lazy!  I can't stress this enough!  :-)
+
+
+ ii. Arranging Songs
+ -------------------
+
+In many NES games, the arrangement of the music and sound effects may be
+helter-skelter.  Sometimes, a game may have its "ending" music before its
+level music, or it might have a section of music, then sound effects, then
+more music.  This makes for inconvenient listening.  What the ripper can do is
+rearrange the ordering of the "songs" so that the songs are arranged in a more
+logical fashion.  It's easier than you think!
+
+All that one has to do is make up a table (or array or index) containing a
+"proper" ordering of songs in the music file.  Let's say for example that when
+you play the music of a certain game, the order of songs encountered in the
+music-player (either in the NES ROM or the .NSF file) goes like this: Title,
+Ending, Level 2, Level 1, Level 3.  You obviously want to rearrange the songs
+so that the Level music is in the correct order, and that the Ending music is
+at the end.  In the NES ROM of the assembled sourcecode, you can see a pair of
+numbers on-screen which tell you the current song number being played.  (This
+corresponds to the number which is loaded into the 6502's accumulator right
+before JSRing to the INIT subroutine.)  The way the hypothetical ROM is right
+now, song 0 is the Title music, song 1 the Ending music, song 2 the Level 2
+music, and so on.  What I usually do is go through each song, and write down
+the song number and what part in the game each song is from, like I did above.
+I then make an ordered list of songs.  In the case of the example above, I
+would write down $00,$03,$02,$04,$01.  There, we have the 5 songs, all in the
+order that you want.  Now we have to modify the music data to reflect this.
+
+First off, locate at least 8 or so empty bytes in the music data.  These are
+regions which you know are unused, and are filled with 0s or FFs, or whatever.
+ Just make sure that these are UNUSED bytes.  If you can't find any, then you
+will just have to append the relocation data at the end of the music data
+file, and adapt the Origin of the NES player code (if you are using it) to
+reflect those changes.  The 8 or so bytes are going to be used up with some
+instructions designed to load the accumulator with a number from that ordered
+list of songs that you made.  But first, you need to check the first
+instructions at the beginning of the INIT code (which you discovered in step
+4), to see if they are relocatable.  Usually, the first bytes immediately at
+the INIT address are something to the effect of $4C$zz$zz, in other words, JMP
+$zzzz.  This is really easy to modify.  Simply change in a HEX editor the
+address in the JMP instruction to the beginning of the location where you
+found some free bytes.  Make sure you memorize or jot down the original
+address JMPed to in that instruction.  Also make sure you take into account
+the origin of the music code.  For example, whatever offset you have in the
+music code file, you must add $8000 to it (or whatever your Origin/LOAD
+address) is.
+
+Next, you should look for some more empty and unused bytes to store your
+relocation table.  You will need as many free bytes as there are songs in your
+list of music.  In the example above, I had 5 songs, so I will need 5 unused
+bytes.  I will then type in the list of songs into these bytes:
+$00,$03,$02,$04,$01.  Now, memorize or write down the location of the
+beginning of this table (being sure to add the origin to this number as well.)
+
+Now that you know the address of the relocation table, you should lay down
+some HEX code back at those 8 or so unused bytes:
+
+$AA,$BD,$yy,$xx,$4C,$zz,$zz, which translates to:
+
+    TAX
+    LDA $xxyy,X
+    JMP $zzzz
+
+(where $xxyy is the address of your relocation table, the area where your
+ordered list of music is stored; and zzzz is the original address which was
+originally at the beginning of the INIT routine).
+
+What this will do is: The NSF player/NES ROM player will JSR to the same old
+INIT subroutine with the starting song stored in the accumulator, but as soon
+as it gets there, it will be redirected through a JMP instruction to your
+relocation code.  Your relocation code takes the value stored in the
+accumulator and uses that to get values from the lookup-table that you made. 
+Once it has this value, it will JMP back to the REAL beginning of the INIT
+code.
+
+And voila!  You have made a simple relocation table!  Try it out to see if it
+works.
+
+Sometimes, at the beginning of the INIT routine in a game, the code is
+something complicated, like $C9,$FD,$D0,$03.... or in ASM terms,
+
+    CMP #$FD
+    BNE ($INIT+#$04) + #$03   ;Remember that BNEs are relative, not absolute!
+
+This might trip you up, but you can always put this code after your relocation
+routine.  In place of this code at the location of the INIT routine, put this
+instead:
+
+$4C,$ww,$vv,$EA, which is:
+
+    JMP $vvww        ;location of relocation code.
+    NOP              ;to fill in the gap.
+
+Next, at the location for your relocation code, put in:
+
+$AA,$BD,$yy,$xx,$C9,$FD,$D0,$03,$4C,($INIT+#$04),$4C,($INIT+#$04)+#$03, which
+is:
+
+    TAX
+    LDA $xxyy,X
+    CMP #$FD
+    BNE (PC+1) + 3   ;Branch 3 bytes over (after PC increment)
+    JMP ($INIT+#$04) ;Whatever was skipped over back at INIT, in other words.
+    JMP ($INIT+#$04) + 3
+
+(This code might look messy.  I'll give an example.  Mega Man 2 is like this. 
+At its INIT routine at $8003, it has this code:
+
+$C9,$FC,$D0,$03,$4C,$29,$81,$C9,... which in ASM is this:
+
+    CMP #$FC
+    BNE $800A
+    JMP $8129....
+
+I replace it with a JMP to my redirection code, and at my redirection code is
+this:
+
+$AA,$BD,$yy,$xx,$C9,$FC,$D0,$03,$4C,$07,$80,$4C,$0A,$80, which in ASM is this:
+
+    TAX
+    LDA $xxyy,X    ;Get value from lookup-table.
+    CMP #$FC
+    BNE (PC+1) + 3
+    JMP $8007      ;This is the location directly after the BNE #$03...
+    JMP $800A      ;This is the location it would have jumped to.
+
+This may seem like a lot of hard work, but it is an efficient way of
+relocating code and still maintaining the same logic structure of the original
+music data.  Better still, the INIT and PLAY routine locations remain the same
+as they were in the unmodified version of the music data, which is important
+for consistency's sake.  I realize that this may sound confusing in
+description, but believe me, it is simple in practice.
+
+The NSF format was originally designed by Kevin Horton in order to save the
+music from games into a compact and useful standard similar to the PSID file
+format.  With this in mind, please don't leave songs and samples unarranged
+in the .NSF file.  The recommended practice is to order the songs and NOT to
+include the sound effects in the NSF.  Please, sound effects are so generic
+and it is incredibly annoying to sift through 70 sounds that go like (in
+Kevin's words): "boing, boooing, pop, poop, poooop, pfft, pffft, pfff, pshhht,
+ff, ffff, ffff, zap, zzap, zzzzap" in order to get to some more music.  Having
+said that, if you _must_ include SFX in the .NSF file, put them way at the back,
+behind all the music.  You don't need to build a huge relocation table just to
+accommodate the SFX.  You can just put in some code (for example, if there are
+15 songs and the rest are SFX) that checks the accumulator upon entry into the
+INIT routine, and if it is <15, you look it up in a relocation table.  If the
+contents of the accumulator are >=15, then you either pass it through to the
+INIT routine (if the SFX start at 15), or add whatever value to the accumulator
+that gets you to the start of the SFX.  So, I'm just helping out, but in no way
+condoning the inclusion of SFX into an .NSF rip.
+
+
+ iii. Ripping/Relocating Samples.
+ --------------------------------
+
+Now we come to a part that might be overlooked by hasty rippers.  When you rip
+the music data from a game, oftentimes you might find that the DPCM samples
+have disappeared in the rip.  If you rip the music from a game which you KNOW
+has samples in it, you will have to relocate the sample data located in the
+game code ($C000-$FFFF) and change the pointers to it in order to be able to
+hear the samples again in the ripped file.  This method only covers DPCM
+samples and not relocation of the "RAW" format of samples.  The latter is a
+little more difficult, and not something in which I have experience.
+
+First off, play a game on a real NES, and check to see if you hear any
+samples, such as voices, percussive instruments, etc...  If it does, you will
+have to rip it.  If you can't verify it this way, do a search through the
+music code of the ripped game for writes to $4010-$4013, and also somehow
+setting the upper nybble of $4015 to 1.  Many games store the data to write to
+$4010-$4013 in a table, so it is your task to find this table.  GrayBox on the
+Mac helps out immensely, because you can monitor $4010-$4015, and glean the
+data written to those locations.  For example, let's say that a game writes to
+$4010-$4013 this: $0E,$00,$C0,$23.  You can then search through the music code
+for a table containing these bytes in series, among other similar bytes. 
+Usually, you'll find a large table with these bytes among them, which points
+to samples in different locations, but have only their playback frequencies
+($4010) which differ.
+
+If you are just using NESticle or similar, your job is a little more
+difficult.  Many games have the location of the sample table stored in the
+zero-page somewhere, so it is not a direct access to it in the ROM.  It is
+somewhat time-consuming, but you can find the location of a sample table by
+disassembling the music-code, and then looking for the code where it loads a
+value from someplace, and then saves it at "$4010,Y".  Sometimes, the
+zero-page address is accessed here.  From that address, you can do a dump of
+memory at that zero-page address for a clue as to where in the music code the
+table is.
+
+Or, in NESticle (or a tracing emulator), you can trace through the NMI routine
+for the code that initiates a sample.  This obviously doesn't happen every
+VBlank, so you might have to be creative in the timing of your traces.  When
+you reach a point in the trace where you know beforehand (by disassembling and
+looking for writes to $4010-$4013) that the game is about to load data and
+write it to the sample addresses, slow down.  Look for the first instruction
+that goes something like "LDA ($8D),Y".  Then when it goes "STA $4010,Y" or
+something similar, view the registers if you can.  Write down what is in the
+accumulator.  Repeat these steps for the writes to $4011, $4012, and $4013. 
+You now should have 4 bytes which make up part of the sample table of that
+game.  Now do a search for these 4 bytes in the music code using a HEX editor.
+ It should find the sample table for you!
+
+Batman, for instance, has a table that looks like this:
+
+$0F,$00,$C0,$0D
+$0F,$00,$C4,$1F
+$0F,$00,$CC,$1F
+$0E,$00,$CC,$1F
+$0C,$00,$CC,$1F
+
+This means that there are 5 different sample sounds used in the game: One at
+(($C0 * #$40) + $C000), which has a sample length of (($0D * #$10) + 1)
+(bytes), being played at a frequency of "$0F"; another sample at (($C4 * #$40)
++ $C000), which has a sample length of (($1F * #$10) + 1), being played at a
+frequency of "$0F"; and another at (($CC * #$40) + $C000), which has a sample
+length of (($1F * #$10) + 1), being played at 3 different frequencies: $0F,
+$0E, and $0C.  In a table then, you have samples:
+
+Sample  Location  Length
+-----------------------------------
+1       $F000     209 (#$D1)  bytes           
+2       $F100     497 (#$1F1) bytes
+3       $F300     497 (#$1F1) bytes
+4       $F300     497 (#$1F1) bytes
+5       $F300     497 (#$1F1) bytes
+
+The frequency doesn't matter; just make sure you are able to count the number
+and length of all of the samples used in the game.  Most games store their
+sample data at or near the end of their game code, at around $E000-$FFFF. 
+Once you have taken note of all the samples used (either by studying the table
+in the music code of a game, or by taking note of all the different
+combinations of things written to $4010-$4013, save the total sequential
+sample data pointed to by the game into a different file, maybe called
+"game.smp".  In Batman, for instance, I would rip out the data from $F000 (in
+the NES' memory space) to $F4F1 (at least) and save it into a file.  Maybe
+making the total sample length a multiple of 64 bytes (but still longer than
+the used sample length) would be a good idea.
+
+Now that you have the samples correctly stored in another file, you need to
+tack it on to the end of the music code that you ripped.  But, you need to
+make sure that the sample data fits into the address space of $C000-$FFFF in
+the NES, AND that the sample data is aligned at a 64-byte boundary.  If you
+just rip out the music code, and the total length of the code is a full 16384
+bytes, then the sample data appended to the music code will show up exactly at
+$C000.  If the music code that you ripped does not go all the way to $BFFF in
+the NES' memory space, then you will need to pad the rest of the music code to
+make up for the shortage.  SAMPLES NEED TO FIT SOMEWHERE IN $C000-$FFFF!!
+
+After you have chosen a good location for the sample data, you will need to
+modify the instances of all those samples in the sample table to reflect your
+putting the samples at the beginning of $C000 instead of where it was at the
+end of memory.  For instance in Batman, the sample which was at $F000 is now
+at $C000.  So you will need to change the "sample address" byte (which will go
+into $4012) in the sample table to $00, instead of the $C0 which it once was. 
+Clever hexadecimal mathematicians will realize that you now have to do the
+same to the rest of the instances in the sample table: you have to subtract
+$C0 from the other sample pointers as well.  A finished sample table (in
+Batman, for example) should look like the one on the right:
+
+$0F,$00,$C0,$0D   <- this   $0F,$00,$00,$0D
+$0F,$00,$C4,$1F   goes to   $0F,$00,$04,$1F
+$0F,$00,$CC,$1F   this ->   $0F,$00,$0C,$1F
+$0E,$00,$CC,$1F    -->      $0E,$00,$0C,$1F
+$0C,$00,$CC,$1F    -->      $0C,$00,$0C,$1F
+
+It is a little tricky to grasp, but if you just study the meaning of the
+registers from $4010 - $4015, you should understand it.  I can provide other
+example files for better illustrative purposes.
+
+So, to recap... Hunt for and rip out the sample data.  Stick the sample data
+somewhere which will go into $C000-$FFFF of the NES' memory at a 64-byte
+offset.  Change the bytes in the sample table which point to the location of
+the sample data to point to the new location of the samples.
+
+Finally, if you are using the ASM NES player to make the ripped music code
+into an NES ROM, make sure you: Make a valid iNES header, append the music
+code, append the sample data, assemble the ASM file (MAKING SURE TO CHANGE THE
+ORIGIN OF THE PLAYER CODE TO REFLECT THE NEW PRESENCE OF THE SAMPLE DATA
+STARTING AT THE $C000 REGION!), and append the assembled binary file.  You
+should have a working, sampling :-) NES audio ROM.
+
+For .NSF files, just make sure you make a valid .NSF header, append the music
+code, and then append the sample data (making sure the sample data will get
+loaded in to somwehere in $C000-$FFFF!)
+
+
+6. NSF Guidelines (RULES!!!)
+----------------------------
+
+Now that NES music ripping has become popular and is done by many people, it
+has become clear that a set of standards should be adhered to in ripping and
+creating NESM (.NSF) files.  I'm not just being Mr. Gestapo here; it is
+important for the sake of ease-of-use, for the benefit of the end user, and
+for legal purposes (maybe).  Here are some things which you should seriously
+think about after and while ripping NES music:
+
+ 1) Don't put your name or "handle" in the "Artist/Composer" field, or anywhere
+    else in the NSF header, for that matter.  If you're looking for fame in
+    ripping, you won't get it here.  This field is for the name of the original
+    composer of the music only.  Don't think this is harsh; the HVSC has the
+    same rule.  The basic premise is that the music is more important than the
+    individuals who rip it.  Fortunately, some NSF collections give credit to
+    whoever ripped the music, but it is done outside the actual file.
+
+ 2) Don't be a lazy arse and not credit the composer or game company.  Don't
+    just put <?> in the composer or copyright fields when you know that you
+    could spend 5 minutes to find out, by looking inside of the game ROM, and
+    just by looking at the title screen for the company and copyright date.
+    This is becoming a very prevalent problem, with many individuals ignoring
+    crediting the composers and companies that made the game.  Don't know the
+    company and copyright date of the game whose music you just ripped?
+    TAKE A LOOK ON THE BLOODY TITLE SCREEN!!  JEEZ!
+
+ 3) Try to reduce the NSF file size by as much as possible before releasing it.
+    Don't just dump the NES' 64k of RAM, slap a header on top, and send it out
+    there.  Try to figure out what the upper and lower boundaries of the music
+    code are in the file, and chop off anything else.  This is important for
+    people who have computers with filesystems that access the harddrive in
+    large blocks.  An NSF file that is 32k + the header will, unfortunately,
+    take up much more space because it is just a tad over the 32k blocksize.
+    (I know that people with this problem are in the minority now, but it is
+    at least nice to be considerate.)  This is also another problem that is
+    becoming prevalent: lazy arses that just tack the NESM header to 32k worth
+    of ROM.  Listen, most games out there that have memory mappers that switch
+    16k of ROM at a time generally have their music code limited to 16k of ROM!
+    It is further inexcusable if you rip music whose code starts at $E000 or
+    somewhere similar, and your NSF file is 32k.  Optimize that sucker, or the
+    world will frown upon you.
+
+ 4) Don't pass off a bad rip as a good one.  If you ripped some music and a
+    song messes up, or you know that there are songs missing from the rip that
+    you heard while playing the game, then say so.  Preferrably in the "Name"
+    field of the NSF file.  This might look ugly, but it lets the user know
+    that the file is incomplete, and it lets other rippers know to try to rip
+    (or correct) a complete, working version of the music to replace that file.
+    (When I ripped MegaMan 3, it turned out to be a bad rip, so I stuck "BAD
+    RIP!!" in the file's name.  Somebody soon after corrected the rip.)
+
+ 5) Don't make a rip that's identical to a prior one just so that you can get
+    your name in lights.  If you improve on the rip in a way, by arranging the
+    songs or something, then that's OK.  But be considerate of other people.
+    Before you rip music from a game, make sure it doesn't already exist in
+    the current NSF collections, either under the same or similar name, or under
+    its Japanese name.  Don't know the Japanese name?  Take a listen to all the
+    Japanese NSFs from the game company that made the music to the game that
+    you want to rip.  At the very least, you get to listen to some great music.
+
+    I don't think adding sound effects to a rip constitutes a new rip.  The
+    standard that people are trying to adopt is one that includes the music,
+    in a proper order.  Sound effects are really not needed, unless they are
+    completely awesome, or something.  (I'm sure we're all bored of the bog-
+    standard jumping and sword-slashing sounds by now.)
+
+ 6) Arrange the songs in the file, if you can (see section 5 of this guide, or
+    ask me how to.)  This makes it much more pleasant for the user to listen
+    to all the songs in a sequential, even chronological order (as they appear
+    in the game proper.)  Just don't force the user to have to wade through
+    invalid song numbers or random sound effects just to listen to a song he/she
+    likes.  All the information for which songs to play in what order should
+    ideally be stored in just one file.
+
+ 7) Study the NESM/.NSF file format specification carefully.  Especially take
+    note of how NTSC and PAL timings work.  The NTSC speed in the file is to
+    be written literally as #$1A,#$41.  It is in the "Intel" format, which,
+    although considered clumsy by many, is the standard in THIS particular file
+    format and should be acknowledged.  Also, if you rip the music from a PAL
+    game, make sure you either provide for PAL/NTSC switching, or set the PAL
+    bit and PAL speed in the file.  NSF players should then (HOPEFULLY, guys!)
+    recognize the intended playback speed of the music.
+
+ 8) Don't invent your own data format to put in the .NSF header.  If you discover
+    a new mapper that has a built-in Theremin, or something, let Kevin Horton
+    (khorton@iquest.net) know about it, and he'll include it somehow into the NSF
+    spec.  Kevin has now taken into account bank switching for the FDS' RAM area,
+    so rippers of FDS music should make their rips conform to what he outlined in
+    the NSF spec.
+
+
+7. Conclusion
+-------------
+
+This is just a guide to the basics of NES music ripping.  I'm sure I have not
+covered some things here which are also necessary for ripping some games, but
+again, my knowledge of this matter is definitely not extensive.  This document
+has been eclipsed by other ripping documents, but until they get translated from
+Japanese, I'm afraid I'll have to stick with this.  :-(         This document
+is rather large, and I have written a whole lot.  Don't be confused or
+bewildered initially by all the damn writing.  Get to know ASM and the NES
+internals first; the terminology that I use will then become a little more
+understandable.
+
+I must give a big THANK YOU to Kevin Horton, who invented the .NSF header
+format, and started the ball rolling on NES music.  He still does the
+difficult rips; I have done just some easy ones.  Thanks also to Michel
+Iwaniec for making some great NSF players.  I look forward to the day when we
+will have a collection that rivals the HVSC (no kidding!)
+
+If anybody wants to start a PSID/NSF-like music format for GameBoy, Turbo/PCE
+Master System/Game Gear, etc... you have my full support!  You can see from
+this document in theory how it should be done, and it would be great to listen
+to the fabulous music of other formats too.  All it takes is a little knowledge
+of the specific hardware and processor of that system, and a will to devise a
+good file standard for that type of music.
+
+If anybody has any questions about NES music ripping that isn't covered
+(adequately) in this document, feel free to mail me at ccovell@direct.ca. 
+Also, if you spot any glaring errors or omissions, let me know.  You might
+also want to take the time to check out my webpage at
+http://mypage.direct.ca/c/ccovell, for some fun videogame-related
+stuff, and art and poetry, and much more!  Bye for now and good luck
+ripping!!!
+
+
+8. Appendix
+-----------
+
+ i. The NESM/.NSF Format
+ -----------------------
+
+The NESM format is a header format invented by Kevin Horton and designed to
+enable music players to play back music code ripped from NES and Famicom
+games, using a standardized interface.  The format is called NESM, but the
+files themselves have the .NSF suffix, which stands for "NES Sound Format". 
+Around the Internet, most people are already beginning to refer to these files
+as just "NSFs".  I believe that is the name that will stick.  In this
+document, I refer to files in this format as such.
+
+
+
+                            NES Music Format Spec
+                            ---------------------
+
+
+By: Kevin Horton  khorton@iquest.net
+
+
+NOTE:
+-----
+
+Since I last updated this spec, it seems some Japanese rippers have
+added some stuff to this spec without asking/telling me what they
+added.  I've had to gronk out this extra information so Sunsoft, Namco,
+and FDS tunes currently released MAY NOT CONFORM TO THIS SPEC.  I will
+do my best to fix the non-conforming tunes.  
+
+Remember that I am very willing to add stuff and update this spec.  If
+you find a new sound chip or other change let me know and I will get back
+with you.  E-mail to the above address. 
+
+
+V1.50 - 05/28/2000 Updated FDS, added Sunsoft and Namco chips
+V1.32 - 11/27/1999 Added MMC5 register locations
+V1.30 - 11/14/1999 Added MMC5 audio bit, added some register info
+V1.20 - 09/12/1999 VRC and FDS prelim sound info added
+V1.00 - 05/11/1999 First official NSF specification file
+
+
+
+This file encompasses a way to transfer NES music data in a small, easy to
+use format.
+
+The basic idea is one rips the music/sound code from an NES game and prepends
+a small header to the data.
+
+A program of some form (6502/sound emulator) then takes the data and loads
+it into the proper place into the 6502's address space, then inits and plays
+the tune.
+
+Here's an overview of the header:
+
+offset  # of bytes   Function
+----------------------------
+
+0000    5   STRING  "NESM",01Ah  ; denotes an NES sound format file
+0005    1   BYTE    Version number (currently 01h)
+0006    1   BYTE    Total songs   (1=1 song, 2=2 songs, etc)
+0007    1   BYTE    Starting song (1= 1st song, 2=2nd song, etc)
+0008    2   WORD    (lo/hi) load address of data (8000-FFFF)
+000a    2   WORD    (lo/hi) init address of data (8000-FFFF)
+000c    2   WORD    (lo/hi) play address of data (8000-FFFF)
+000e    32  STRING  The name of the song, null terminated
+002e    32  STRING  The artist, if known, null terminated
+004e    32  STRING  The Copyright holder, null terminated
+006e    2   WORD    (lo/hi) speed, in 1/1000000th sec ticks, NTSC (see text)
+0070    8   BYTE    Bankswitch Init Values (see text, and FDS section)
+0078    2   WORD    (lo/hi) speed, in 1/1000000th sec ticks, PAL (see text)
+007a    1   BYTE    PAL/NTSC bits:
+                 bit 0: if clear, this is an NTSC tune
+                 bit 0: if set, this is a PAL tune
+                 bit 1: if set, this is a dual PAL/NTSC tune
+                 bits 2-7: not used. they *must* be 0
+007b    1   BYTE    Extra Sound Chip Support
+                 bit 0: if set, this song uses VRCVI
+                 bit 1: if set, this song uses VRCVII
+                 bit 2: if set, this song uses FDS Sound
+                 bit 3: if set, this song uses MMC5 audio
+                 bit 4: if set, this song uses Namco 106
+                 bit 5: if set, this song uses Sunsoft FME-07
+                 bits 6,7: future expansion: they *must* be 0
+007c    4   ----    4 extra bytes for expansion (must be 00h)
+0080    nnn ----    The music program/data follows
+
+This may look somewhat familiar;  if so that's because this is somewhat
+sorta of based on the PSID file format for C64 music/sound.
+
+
+Loading a tune into RAM
+-----------------------
+
+If offsets 0070h to 0077h have 00h in them, then bankswitching is *not*
+used.  If one or more bytes are something other than 00h then bankswitching
+is used.  If bankswitching is used then the load address is still used,
+but you now use (ADDRESS AND 0FFFh) to determine where on the first bank
+to load the data.
+
+
+Each bank is 4K in size, and that means there are 8 of them for the
+entire 08000h-0ffffh range in the 6502's address space.  You determine where
+in memory the data goes by setting bytes 070h thru 077h in the file.
+These determine the inital bank values that will be used, and hence where
+the data will be loaded into the address space.
+
+Here's an example:
+
+METROID.NSF will be used for the following explaination.
+
+The file is set up like so:  (starting at 070h in the file)
+
+
+0070: 05 05 05 05 05 05 05 05 - 00 00 00 00 00 00 00 00
+0080: ... music data goes here...
+
+Since 0070h-0077h are something other than 00h, then we know that this
+tune uses bankswitching.  The load address for the data is specified as
+08000h.  We take this AND 0fffh and get 0000h, so we will load data in
+at byte 0 of bank 0, since data is loaded into the banks sequentially
+starting from bank 0 up until the ROM is fully loaded.
+
+Metroid has 6 4K banks in it, numbered 0 through 5.  The 6502's address
+space has 8 4K bankswitchable blocks on it, starting at 08000h-08fffh,
+09000h-09fffh, 0a000h-0afffh ... 0f000h-0ffffh.  Each one of these is 4K in
+size, and the current bank is controlled by writes to 05ff8h thru 05fffh,
+one byte per bank.  So, 05ff8h controls the 08000h-08fffh range, 05ff9h 
+controls the 09000h-09fffh range, etc. up to 05fffh which controls the 
+0f000h-0ffffh range.  When the song is loaded into RAM, it is loaded into
+the banks and not the 6502's address space.  Once this is done, then the
+bank control registers are written to set up the inital bank values.
+To do this, the value at 0070h in the file is written to 05ff8h, 0071h
+is written to 05ff9h, etc. all the way to 0077h is written to 05fffh.
+This is only done once, when the song is loaded.  It is not done after the
+song is loaded between each tune init so make sure that the rip takes this
+into account (the rip usually will).
+
+If the tune was not bankswitched, then it is simply loaded in at the 
+specified load address, until EOF
+
+
+Initalizing a tune
+------------------
+
+This is pretty simple.  Load the desired song # into the accumulator,
+minus 1 and set the X register to specify PAL (X=1) or NTSC (X=0).
+If this is a single standard tune (i.e. PAL *or* NTSC but not both)
+then the X register contents should not matter.  Once the song # and
+optional PAL/NTSC standard are loaded, simply call the INIT address.
+Once init is done, it should perform an RTS.
+
+
+Playing a tune
+--------------
+
+Once the tune has been initalized, it can now be played.  To do this,
+simply call the play address several times a second.  How many times
+per second is determined by offsets 006eh and 006fh in the file.
+These bytes denote the speed of playback in 1/1000000ths of a second.  
+For the "usual" 60Hz playback rate, set this to 411ah.  
+
+To generate a differing playback rate, use this formula:
+
+
+         1000000
+PBRATE= ---------
+          speed
+
+Where PBRATE is the value you stick into 006e/006fh in the file, and
+speed is the desired speed in hertz. 
+
+
+"Proper" way to load the tune
+-----------------------------
+
+1) If the tune is bankswitched, go to #3.
+
+2) Load the data into the 6502's address space starting at the specified
+   load address. Go to #4.
+
+3) Load the data into a RAM area, starting at (start_address AND 0fffh).
+   Load the inital bank values into the bank select registers.
+
+4) Tune load is done.
+
+
+"Proper" way to init a tune
+---------------------------
+
+1) Clear all RAM at 0000h-07ffh.
+
+2) Init the sound registers by writing 00h to 04000-04013h.
+
+3) Set volume register 04015h to 00fh.
+
+4) Set the accumulator and X registers for the desired song.
+
+5) Call the music init routine.
+
+
+"Proper" way to play a tune
+---------------------------
+
+1) Call the play address of the music at periodic intervals determined
+   by the speed words.  Which word to use is determined by which mode
+   you are in- PAL or NTSC.
+
+
+Sound Chip Support
+------------------
+
+Byte 007bh of the file stores the sound chip flags.  If a particular flag
+is set, those sound registers should be enabled.  If the flag is clear,
+then those registers should be disabled.
+
+* VRCVI Uses registers 9000-9002, A000-A002, and B000-B002, write only.
+
+Caveats: 1) The above registers are *write only* and must not disrupt music
+            code that happens to be stored there.
+
+         2) Major caveat:  The A0 and A1 lines are flipped on a few games!!
+            If you rip the music and it sounds all funny, flip around 
+            the xxx1 and xxx2 register pairs.  (i.e. 9001 and 9002)  9000
+            and 9003 can be left untouched.  I decided to do this since it 
+            would make things easier all around, and this means you only 
+            will have to change the music code in a very few places (6).
+            Esper2 and Madara will need this change, while Castlevania 3j
+            will not for instance.
+         
+         3) See my VRCVI.TXT doc for a complete register description.
+
+* VRCVII Uses registers 9010 and 9030, write only.
+
+Caveats: 1) Same caveat as #1, above.
+
+         2) See my VRCVII.TXT doc for a complete register description.
+
+* FDS Sound uses registers from 4040 through 4092.
+
+Caveats: 1) 6000-FFFF is assumed to be RAM, since 6000-DFFF is RAM on the
+            FDS.  E000-FFFF is usually not included in FDS games because
+            it is the BIOS ROM.  However, it can be used on FDS rips to help
+            the ripper (for modified play/init addresses).
+
+         2) Bankswitching operates slightly different on FDS tunes.  
+            5FF6 and 5FF7 control the banks 6000-6FFF and 7000-7FFF 
+            respectively.  NSF header offsets 76h and 77h correspond to
+            *both* 6000-7FFF *AND* E000-FFFF.  Keep this in mind!
+
+*MMC5 Sound Uses registers 5000-5015, write only.
+
+Caveats: 1) Same as #1, above.
+
+         2) Generating a proper doc file.  Be patient.  
+
+*Namco 106 Sound Uses registers 4800 and F800.  
+
+Caveats: 1) No other information available.  Seems to be the only addition.
+
+
+*Sunsoft FME-07 Sound uses unknown registers somewhere around Cxxx
+
+Caveats: 1) No other information available.
+
+
+
+Caveats
+-------
+
+1) The starting song number and maximum song numbers start counting at
+   1, while the init address of the tune starts counting at 0.  To
+   "fix", simply pass the desired song number minus 1 to the init
+   routine.
+
+2) The NTSC speed word is used *only* for NTSC tunes, or dual PAL/NTSC tunes.
+   The PAL speed word is used *only* for PAL tunes, or dual PAL/NTSC tunes.
+
+3) The length of the text in the name, artist, and copyright fields must 
+   be 31 characters or less!  There has to be at least a single NULL byte
+   (00h) after the text, between fields.
+
+4) If a field is not known (name, artist, copyright) then the field must
+   contain the string "<?>" (without quotes).  
+
+That's it!
+
+
+
+ ii. Example 6502 ASM Player
+ ---------------------------
+
+This is the sourcecode for a 6502 player which will play ripped NES music.  It
+was coded by Kevin Horton, and I converted it to DASM's format and added a
+graphical display and definable constants for INIT, PLAY, etc...  You can
+assemble it in the cross-platform cross-assembler DASM, using the option -f3,
+and by joining an iNES header, the ripped music code, and the assembled binary
+together.  It should in its present form, with header, ripped music, and
+binary, form a .NES file which is 32784 bytes large.  Press "start" to advance
+songs.
+
+
+;*BEGIN ASM FILE*
+
+int_en EQU #$0100
+sng_ctr EQU #$0101
+pv_btn EQU #$0102
+
+INIT_ADD EQU #$8003        ;INIT Address
+PLAY_ADD EQU #$8000        ;PLAY Address
+START_SONG EQU #$00        ;Starting Song
+MAX_SONG EQU #$FF          ;Maximum Number of Songs
+
+   PROCESSOR 6502
+
+;code
+
+   ORG $C000                ;Origin of player code
+
+.start    sei
+          cld
+          ldx #$ff
+          txs
+
+.w_vbi    lda $2002
+          bpl .w_vbi
+
+          lda #$0
+          tax
+
+.ci_lp    sta $0000,X
+          sta $0100,X
+          sta $0200,X
+          sta $0300,X
+          sta $0400,X
+          sta $0500,X
+          sta $0600,X
+          sta $0700,X
+          inx
+          bne .ci_lp     ;clear RAM
+
+          lda #$80
+          sta $2000
+          lda #$00
+          sta $2001  ;set up PPU for interrupts, disable screen
+
+          lda #$00
+          sta $2006
+          sta $2006
+          tax
+.PATCLR   sta $2007        ;Clear char 0 in ppu.
+          inx
+          cpx #$10
+          bne .PATCLR
+
+
+          lda #$01
+          sta $2006
+          lda #$00
+          sta $2006     ;Point to $0100 in PPU
+
+          ldx #$00
+          ldy #$00
+.PATLoad  lda .PAT,X
+          sta $2007
+          inx
+          iny
+          cpy #$08      ;Save 8 bytes.
+          bne .PATLoad
+          ldy #$00
+          sty $2007     ;Save blank gfx.
+          sty $2007
+          sty $2007
+          sty $2007
+          sty $2007
+          sty $2007
+          sty $2007
+          sty $2007
+          cpx #$80
+          bne .PATLoad
+
+          lda #$3F
+          sta $2006
+          lda #$00
+          sta $2006
+          lda #$0E
+          sta $2007
+          lda #$30
+          sta $2007     ;Set up Palette
+
+          lda #$00
+          sta sng_ctr
+
+          lda #%00001110
+          sta $2001
+
+          lda #START_SONG         ;Start Song
+          sta sng_ctr
+          jsr INIT_ADD     ;init tune
+          LDA #$01
+          sta int_en
+
+.k_loop   jsr .r_btn
+          and #$10
+          beq .k_loop
+
+          inc sng_ctr
+          LDA #MAX_SONG         ;Max Song.
+          cmp sng_ctr
+          bne .no_scr
+          lda #$0
+          sta sng_ctr
+
+.no_scr   lda #$0
+          sta int_en
+          lda sng_ctr
+          jsr INIT_ADD
+          lda #$01
+          sta int_en
+          jmp .k_loop    ;check button, if pressed inc song # and re-init
+
+
+.interrupt pha
+           txa
+           pha
+           tya
+           pha
+
+           lda #$20
+           sta $2006
+           sta $2006       ;Point to Name Table
+
+           lda sng_ctr
+           lsr
+           lsr
+           lsr
+           lsr
+           ora #$10        ;Point to right chr.
+           sta $2007
+           lda sng_ctr
+           and #$0F
+           ora #$10
+           sta $2007
+
+           lda #$00
+           sta $2006
+           sta $2006
+           sta $2005
+           sta $2005
+
+           lda int_en
+           beq .no_ints
+           jsr PLAY_ADD    ;play tune
+
+.no_ints   pla
+           tay
+           pla
+           tax
+           pla
+           rti
+
+.r_btn     ldy #$08      ;read keypad
+           ldx #$01
+           stx $4016
+           dex
+           stx $4016
+
+.r_bit     lda $4016
+           ROR
+           txa
+           ROL
+           tax
+           dey
+           bne .r_bit
+
+           cmp pv_btn
+           beq .no_chg
+           sta pv_btn
+           rts
+
+.no_chg    lda #$0
+           rts
+
+.PAT dc.b  #$38,#$4C,#$C6,#$C6,#$C6,#$64,#$38,#$00
+     dc.b  #$18,#$38,#$18,#$18,#$18,#$18,#$7E,#$00
+     dc.b  #$7C,#$C6,#$0E,#$3C,#$78,#$E0,#$FE,#$00
+     dc.b  #$7E,#$0C,#$18,#$3C,#$06,#$C6,#$7C,#$00
+     dc.b  #$1C,#$3C,#$6C,#$CC,#$FE,#$0C,#$0C,#$00
+     dc.b  #$FC,#$C0,#$FC,#$06,#$06,#$C6,#$7C,#$00
+     dc.b  #$3C,#$60,#$C0,#$FC,#$C6,#$C6,#$7C,#$00
+     dc.b  #$FE,#$C6,#$0C,#$18,#$30,#$30,#$30,#$00
+     dc.b  #$7C,#$C6,#$C6,#$7C,#$C6,#$C6,#$7C,#$00
+     dc.b  #$7C,#$C6,#$C6,#$7E,#$06,#$0C,#$78,#$00
+     dc.b  #$38,#$6C,#$C6,#$C6,#$FE,#$C6,#$C6,#$00
+     dc.b  #$FC,#$C6,#$C6,#$FC,#$C6,#$C6,#$FC,#$00
+     dc.b  #$3C,#$66,#$C0,#$C0,#$C0,#$66,#$3C,#$00
+     dc.b  #$F8,#$CC,#$C6,#$C6,#$C6,#$CC,#$F8,#$00
+     dc.b  #$FE,#$C0,#$C0,#$FC,#$C0,#$C0,#$FE,#$00
+     dc.b  #$FE,#$C0,#$C0,#$FC,#$C0,#$C0,#$C0,#$00
+
+;fill empty space
+
+    ORG $FFFA,0
+
+;vectors
+
+ dc.w .interrupt
+ dc.w .start
+ dc.w .interrupt
+
+;*END ASM FILE*
+-- 
+Chris Covell (ccovell@direct.ca)
+http://mypage.direct.ca/c/ccovell/
+Solar Wars Homepage!
