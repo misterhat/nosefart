@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS =
-LDFLAGS = -lm -lSDL2
+LDFLAGS = -lm -lSDL2 -lSDL2_image -lSDL2_ttf
 PREFIX = /usr
 WANT_DEBUG=TRUE
 
@@ -21,30 +21,35 @@ else
 endif
 
 CFLAGS +=\
- -I$(SRCDIR)\
- -I$(SRCDIR)/linux\
- -I$(SRCDIR)/sndhrdw\
- -I$(SRCDIR)/machine\
- -I$(SRCDIR)/cpu/nes6502\
- -I$(BUILDTOP)\
+ -I$(SRCDIR) \
+ -I$(SRCDIR)/linux \
+ -I$(SRCDIR)/sndhrdw \
+ -I$(SRCDIR)/machine \
+ -I$(SRCDIR)/cpu/nes6502 \
+ -I$(SRCDIR)/kiss_sdl \
+ -I$(BUILDTOP) \
  -I/usr/local/include/
 
 NSFINFO_CFLAGS = $(CFLAGS) -DNES6502_MEM_ACCESS_CTRL
 
-FILES =\
- log\
- memguard\
- cpu/nes6502/nes6502\
- cpu/nes6502/dis6502\
- machine/nsf\
- sndhrdw/nes_apu\
- sndhrdw/vrcvisnd\
- sndhrdw/fmopl\
- sndhrdw/vrc7_snd\
- sndhrdw/mmc5_snd\
- sndhrdw/fds_snd
+FILES = \
+ log \
+ memguard \
+ cpu/nes6502/nes6502 \
+ cpu/nes6502/dis6502 \
+ machine/nsf \
+ sndhrdw/nes_apu \
+ sndhrdw/vrcvisnd \
+ sndhrdw/fmopl \
+ sndhrdw/vrc7_snd \
+ sndhrdw/mmc5_snd \
+ sndhrdw/fds_snd \
+ kiss_sdl/kiss_draw \
+ kiss_sdl/kiss_general \
+ kiss_sdl/kiss_posix \
+ kiss_sdl/kiss_widgets
 
-SRCS = $(addsuffix .c, $(FILES) linux/main_linux nsfinfo)
+SRCS = $(addsuffix .c, $(FILES) ui nsfinfo)
 SOURCES = $(addprefix $(SRCDIR)/, $(SRCS))
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SOURCES))
 
@@ -55,6 +60,7 @@ all: $(ALL_TARGETS)
 
 $(BUILDDIR):
 	mkdir -p $(sort $(dir $(ALL_OBJECTS)))
+	cp res/* $(BUILDTOP)
 
 $(BUILDTOP)/config.h: $(BUILDDIR)
 	echo "[$@]"
