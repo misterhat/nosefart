@@ -217,7 +217,7 @@ SDL_Renderer* kiss_init(char* title, kiss_array *a, int w, int h)
 		kiss_clean(a);
 		return NULL;
 	}
-	return renderer;
+	return renderer;	
 }
 
 int kiss_clean(kiss_array *a)

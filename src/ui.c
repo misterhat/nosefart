@@ -1,7 +1,6 @@
 #include <SDL2/SDL.h>
 #include <libgen.h>
 #include <stdio.h>
-#include <time.h>
 
 #include "config.h"
 #include "kiss_sdl.h"
@@ -39,10 +38,13 @@ static int frames;
 static int *plimit_frames = NULL;
 
 /* OS filename selected */
-char *filename;
+static char *filename;
 
 /* currently activated track number to play */
 static int track = 1;
+
+/* send more data when starting playback */
+static int first_flush = 0;
 
 /* playing or paused */
 static int is_playing = 0;
@@ -58,33 +60,10 @@ static SDL_Renderer *renderer;
 static kiss_window window;
 static kiss_selectbutton channel_buttons[CHANNELS];
 static kiss_button play_button;
+static kiss_hscrollbar track_seek;
 
+static int draw = 1;
 static int quit = 0;
-
-void browse_button_event(kiss_button *button, SDL_Event *e, int *draw) {
-    if (kiss_button_event(button, e, draw)) {
-        quit = 1;
-    }
-}
-
-void play_button_event(kiss_button *button, SDL_Event *e, int *draw) {
-    if (kiss_button_event(button, e, draw)) {
-        is_playing = !is_playing;
-    }
-
-    if (is_playing) {
-        kiss_button_set_text(button, "Pause");
-
-        next_buffer_time = time(NULL) * 1000;
-
-        if (frames >= *plimit_frames) {
-            frames = 0;
-            nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
-        }
-    } else {
-        kiss_button_set_text(button, "Play");
-    }
-}
 
 /* initialize sdl and kiss UI */
 static void init_sdl() {
@@ -174,7 +153,7 @@ void handle_auto_calc(char *filename, int track) {
     *plimit_frames = get_time(filename, track);
 }
 
-static int load_nsf_file(char *filename) {
+static void load_nsf_file(char *filename) {
     nsf_init();
 
     /* load up an NSF file */
@@ -264,7 +243,7 @@ static void dump(char* filename, char *dumpname, int track) {
 }
 
 static void play_tick() {
-    if (!is_playing || time(NULL) * 1000 < next_buffer_time) {
+    if (!is_playing || SDL_GetTicks() < next_buffer_time) {
         return;
     }
 
@@ -279,17 +258,28 @@ static void play_tick() {
 
         float bytesPerSecond = (freq * bits) / 8;
 
-        int delay =
-            ((int)(SDL_GetQueuedAudioSize(1) / bytesPerSecond * 1000)) / 2;
+        int delay;
+
+        if (first_flush) {
+            delay = 0;
+            first_flush = 0;
+            next_buffer_time = SDL_GetTicks();
+        } else {
+            delay = ((int)(bufferSize / bytesPerSecond * 1000));
+            //((int)(SDL_GetQueuedAudioSize(1) / bytesPerSecond * 1000));
+        }
+
 
         next_buffer_time += delay;
-
-        printf("%d\n", delay);
     }
 
     if (frames >= *plimit_frames) {
         is_playing = 0;
+        kiss_button_set_text(&play_button, "Play");
     }
+
+    track_seek.fraction = (float) frames / *plimit_frames;
+    draw = 1;
 }
 
 static void close_nsf_file(void) {
@@ -339,6 +329,45 @@ static void show_version() {
     printf(" more\nchanges made by Zorian Medwid.\n");
 
     exit(0);
+}
+
+void browse_button_event(kiss_button *button, SDL_Event *e, int *draw) {
+    if (kiss_button_event(button, e, draw)) {
+        quit = 1;
+    }
+}
+
+void play_button_event(kiss_button *button, SDL_Event *e, int *draw) {
+    if (kiss_button_event(button, e, draw)) {
+        is_playing = !is_playing;
+
+        if (is_playing) {
+            kiss_button_set_text(button, "Pause");
+
+            first_flush = 1;
+
+            if (frames >= *plimit_frames) {
+                frames = 0;
+                bufferPos = buffer;
+                nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
+                sync_channels();
+            }
+        } else {
+           kiss_button_set_text(button, "Play");
+        }
+    }
+}
+
+void track_combo_event(kiss_combobox *combobox, SDL_Event *e, int *draw) {
+    if (kiss_combobox_event(combobox, e, draw)) {
+        track = atoi(combobox->entry.text);
+        nsf->current_song = track;
+        frames = 0;
+        bufferPos = buffer;
+        handle_auto_calc(filename, track);
+        nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
+        sync_channels();
+    }
 }
 
 int main(int argc, char** argv) {
@@ -466,8 +495,6 @@ int main(int argc, char** argv) {
     nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
 
     init_sdl();
-
-    int draw = 1;
 
     /* header widgets (filename and browse) */
 
@@ -622,7 +649,6 @@ int main(int argc, char** argv) {
     x += BUTTON_WIDTH + PADDING;
     y += PADDING;
 
-    kiss_hscrollbar track_seek;
     kiss_hscrollbar_new(&track_seek, &window, x, y - 2, WIDTH - x - PADDING);
 
     window.visible = 1;
@@ -632,6 +658,7 @@ int main(int argc, char** argv) {
     while (!quit) {
         play_tick();
 
+        // TODO check next_buffer_time and make sure not to delay too much here
         SDL_Delay(10);
 
         while (SDL_PollEvent(&e)) {
@@ -642,18 +669,32 @@ int main(int argc, char** argv) {
             kiss_window_event(&window, &e, &draw);
             browse_button_event(&button, &e, &draw);
 
+            int update_channels = 0;
+
             for (int i = 0; i < CHANNELS; i++) {
-                kiss_selectbutton_event(&channel_buttons[i], &e, &draw);
+                if (kiss_selectbutton_event(&channel_buttons[i], &e, &draw)) {
+                    channels_enabled[i] = channel_buttons[i].selected;
+                    update_channels = 1;
+                }
             }
 
-            kiss_combobox_event(&track_combo, &e, &draw);
+            if (update_channels) {
+                sync_channels();
+            }
+
             kiss_selectbutton_event(&replay_button, &e, &draw);
 
             kiss_button_event(&previous_button, &e, &draw);
             play_button_event(&play_button, &e, &draw);
             kiss_button_event(&next_button, &e, &draw);
-            kiss_hscrollbar_event(&track_seek, &e, &draw);
+            track_combo_event(&track_combo, &e, &draw);
+            //kiss_hscrollbar_event(&track_seek, &e, &draw);
         }
+
+        /* these need to be outside of the event polling because holding down
+         * the mouse button can leave them activated */
+        kiss_combobox_event(&track_combo, NULL, &draw);
+        kiss_hscrollbar_event(&track_seek, NULL, &draw);
 
         if (!draw) {
             continue;
@@ -666,7 +707,11 @@ int main(int argc, char** argv) {
         kiss_label_draw(&header_label, renderer);
         kiss_button_draw(&button, renderer);
 
+        kiss_label_draw(&track_label, renderer);
         kiss_label_draw(&song_info_label, renderer);
+
+        /* draw on top */
+        kiss_combobox_draw(&track_combo, renderer);
 
         kiss_label_draw(&channels_label, renderer);
 
@@ -675,7 +720,6 @@ int main(int argc, char** argv) {
             kiss_selectbutton_draw(&channel_buttons[i], renderer);
         }
 
-        kiss_label_draw(&track_label, renderer);
         kiss_label_draw(&replay_label, renderer);
         kiss_selectbutton_draw(&replay_button, renderer);
 
@@ -683,9 +727,6 @@ int main(int argc, char** argv) {
         kiss_button_draw(&play_button, renderer);
         kiss_button_draw(&next_button, renderer);
         kiss_hscrollbar_draw(&track_seek, renderer);
-
-        /* draw on top */
-        kiss_combobox_draw(&track_combo, renderer);
 
         SDL_RenderPresent(renderer);
         draw = 0;
