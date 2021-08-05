@@ -1,6 +1,7 @@
 #include <SDL2/SDL.h>
 #include <libgen.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "config.h"
 #include "kiss_sdl.h"
@@ -31,21 +32,57 @@ static uint16 bits = 8;
 
 static int dataSize;
 static int bufferSize;
-static unsigned char *buffer = 0, *bufferPos = 0;
+static unsigned char *buffer = 0;
+static unsigned char *bufferPos = 0;
 
 static int frames;
 static int *plimit_frames = NULL;
 
+/* OS filename selected */
+char *filename;
+
+/* currently activated track number to play */
+static int track = 1;
+
+/* playing or paused */
+static int is_playing = 0;
+
+/* next timestamp (ms) to add data to sound buffer */
+static long next_buffer_time;
+
+/* which of the six voices are enabled (all by default) */
 static int channels_enabled[CHANNELS];
 
 static kiss_array kiss_objects;
-static kiss_window window;
 static SDL_Renderer *renderer;
+static kiss_window window;
 static kiss_selectbutton channel_buttons[CHANNELS];
+static kiss_button play_button;
 
-void button_event(kiss_button *button, SDL_Event *e, int *draw, int *quit) {
+static int quit = 0;
+
+void browse_button_event(kiss_button *button, SDL_Event *e, int *draw) {
     if (kiss_button_event(button, e, draw)) {
-        *quit = 1;
+        quit = 1;
+    }
+}
+
+void play_button_event(kiss_button *button, SDL_Event *e, int *draw) {
+    if (kiss_button_event(button, e, draw)) {
+        is_playing = !is_playing;
+    }
+
+    if (is_playing) {
+        kiss_button_set_text(button, "Pause");
+
+        next_buffer_time = time(NULL) * 1000;
+
+        if (frames >= *plimit_frames) {
+            frames = 0;
+            nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
+        }
+    } else {
+        kiss_button_set_text(button, "Play");
     }
 }
 
@@ -75,8 +112,6 @@ static void init_sdl() {
         exit(1);
     }
 
-    SDL_AudioSpec wanted;
-
     int format;
 
     if (bits == 8) {
@@ -87,6 +122,8 @@ static void init_sdl() {
         fprintf(stderr, "Bad sample depth: %i\n", bits);
         exit(1);
     }
+
+    SDL_AudioSpec wanted;
 
     wanted.freq = freq;
     wanted.format = format;
@@ -115,6 +152,7 @@ static void init_buffer() {
 static void sync_channels() {
     for (int i = 0; i < CHANNELS; i++) {
         channel_buttons[i].selected = channels_enabled[i];
+        nsf_setchan(nsf, i, channels_enabled[i]);
     }
 }
 
@@ -146,12 +184,6 @@ static int load_nsf_file(char *filename) {
         fprintf(stderr, "Error opening \"%s\"\n", filename);
         exit(1);
     }
-}
-
-/* start track, display which it is, and what channels are enabled */
-static void nsf_setupsong() {
-    nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
-    sync_channels();
 }
 
 static void show_info() {
@@ -215,6 +247,7 @@ static void dump(char* filename, char *dumpname, int track) {
             bufferPos = buffer;
         }
 
+        /* support a minimum of 50 frames */
         if (frames >= 50 && frames >= *plimit_frames) {
             done = 1;
         }
@@ -228,6 +261,35 @@ static void dump(char* filename, char *dumpname, int track) {
     fwrite(&size, sizeof(uint32), 1, wavFile);
 
     fclose(wavFile);
+}
+
+static void play_tick() {
+    if (!is_playing || time(NULL) * 1000 < next_buffer_time) {
+        return;
+    }
+
+    nsf_frame(nsf);
+    frames++;
+    apu_process(bufferPos, dataSize / (bits / 8));
+    bufferPos += dataSize;
+
+    if (bufferPos >= buffer + bufferSize) {
+        SDL_QueueAudio(1, buffer, bufferPos - buffer);
+        bufferPos = buffer;
+
+        float bytesPerSecond = (freq * bits) / 8;
+
+        int delay =
+            ((int)(SDL_GetQueuedAudioSize(1) / bytesPerSecond * 1000)) / 2;
+
+        next_buffer_time += delay;
+
+        printf("%d\n", delay);
+    }
+
+    if (frames >= *plimit_frames) {
+        is_playing = 0;
+    }
 }
 
 static void close_nsf_file(void) {
@@ -284,9 +346,7 @@ int main(int argc, char** argv) {
         channels_enabled[i] = 1;
     }
 
-    char *filename;
     char *dump_wav_dir;
-    int track = 1;
     int done = 0;
     int just_show_info = 0;
     int dump_wav = 0;
@@ -402,17 +462,22 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    sync_channels();
+    nsf_playtrack(nsf, nsf->current_song, freq, bits, 0);
+
     init_sdl();
 
     int draw = 1;
-    int quit = 0;
 
     /* header widgets (filename and browse) */
 
     int y = PADDING;
     int x = PADDING;
 
-    char* base_name = basename(filename);
+    /* basename modifies the original string */
+    char filename_copy[strlen(filename)];
+    strcpy(filename_copy, filename);
+    char *base_name = basename(filename_copy);
 
     if (strlen(base_name) > 49) {
         base_name[49] = '.';
@@ -442,23 +507,23 @@ int main(int argc, char** argv) {
     kiss_array track_names;
     kiss_array_new(&track_names);
 
-    kiss_array_appendstring(&track_names, 0, "1", NULL);
-    kiss_array_appendstring(&track_names, 1, "2", NULL);
-    kiss_array_appendstring(&track_names, 2, "3", NULL);
-    kiss_array_appendstring(&track_names, 3, "4", NULL);
-    kiss_array_appendstring(&track_names, 4, "5", NULL);
+    for (int i = track; i < nsf->num_songs; i++) {
+        char int_str[3];
+        sprintf(int_str, "%d", i);
+        kiss_array_appendstring(&track_names, i, int_str, NULL);
+    }
 
     kiss_combobox track_combo;
 
     kiss_combobox_new(
         &track_combo,
         &window,
-        "None",
+        "1",
         &track_names,
         x,
         y - 4,
         COMBO_WIDTH,
-        100
+        (kiss_textfont.fontheight * 5) + 12
     );
 
     x = PADDING;
@@ -547,7 +612,6 @@ int main(int argc, char** argv) {
 
     x += BUTTON_WIDTH + PADDING;
 
-    kiss_button play_button;
     kiss_button_new(&play_button, &window, "Play", x, y);
 
     x += BUTTON_WIDTH + PADDING;
@@ -566,9 +630,9 @@ int main(int argc, char** argv) {
     SDL_Event e;
 
     while (!quit) {
-        //play_tick();
+        play_tick();
 
-        SDL_Delay(16);
+        SDL_Delay(10);
 
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
@@ -576,7 +640,7 @@ int main(int argc, char** argv) {
             }
 
             kiss_window_event(&window, &e, &draw);
-            button_event(&button, &e, &draw, &quit);
+            browse_button_event(&button, &e, &draw);
 
             for (int i = 0; i < CHANNELS; i++) {
                 kiss_selectbutton_event(&channel_buttons[i], &e, &draw);
@@ -586,7 +650,7 @@ int main(int argc, char** argv) {
             kiss_selectbutton_event(&replay_button, &e, &draw);
 
             kiss_button_event(&previous_button, &e, &draw);
-            kiss_button_event(&play_button, &e, &draw);
+            play_button_event(&play_button, &e, &draw);
             kiss_button_event(&next_button, &e, &draw);
             kiss_hscrollbar_event(&track_seek, &e, &draw);
         }

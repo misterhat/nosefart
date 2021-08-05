@@ -3,6 +3,7 @@
 UNIX systems */
 
 #include <SDL2/SDL.h>
+
 #include <ctype.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -52,8 +53,6 @@ static struct termios oldterm;
 /* whether the channels are enabled or not.  Moved out here by Matthew Strait
 so that it could be displayed */
 static bool enabled[6] = {true, true, true, true, true, true};
-
-static int pid = 1; /* something non-zero by default */
 
 /* takes the number of repetitions desired and returns the number of frames
 to play */

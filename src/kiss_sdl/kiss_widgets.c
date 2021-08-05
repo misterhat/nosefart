@@ -114,17 +114,24 @@ int kiss_button_new(kiss_button *button, kiss_window *wdw, char *text,
 	kiss_makerect(&button->rect, x, y, button->normalimg.w,
 		button->normalimg.h);
 	button->textcolor = kiss_white;
-	kiss_string_copy(button->text, KISS_MAX_LENGTH, text, NULL);
-	button->textx = x + button->normalimg.w / 2 -
-		kiss_textwidth(button->font, text, NULL) / 2;
-	button->texty = y + button->normalimg.h / 2 -
-		button->font.fontheight / 2;
+    kiss_button_set_text(button, text);
 	button->active = 0;
 	button->prelight = 0;
 	button->visible = 0;
 	button->focus = 0;
 	button->wdw = wdw;
 	return 0;
+}
+
+int kiss_button_set_text(kiss_button *button, char* text) {
+    int x = button->rect.x;
+    int y = button->rect.y;
+	kiss_string_copy(button->text, KISS_MAX_LENGTH, text, NULL);
+	button->textx = x + button->normalimg.w / 2 -
+		kiss_textwidth(button->font, text, NULL) / 2;
+	button->texty = y + button->normalimg.h / 2 -
+		button->font.fontheight / 2;
+    return 0;
 }
 
 int kiss_button_event(kiss_button *button, SDL_Event *event, int *draw)
