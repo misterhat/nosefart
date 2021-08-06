@@ -140,7 +140,7 @@ int kiss_image_new(kiss_image *image, char *fname, kiss_array *a,
 	if (!image || !fname) return -1;
 	kiss_string_copy(buf, KISS_MAX_LENGTH, RESDIR, fname);
 	if (!(image->image = IMG_LoadTexture(renderer, buf))) {
-		fprintf(stderr, "Cannot load image %s\n", fname);
+		fprintf(stderr, "Cannot load image %s %s\n", buf, IMG_GetError());
 		return -1;
 	}
 	if (a) kiss_array_append(a, TEXTURE_TYPE, image->image);
@@ -217,7 +217,7 @@ SDL_Renderer* kiss_init(char* title, kiss_array *a, int w, int h)
 		kiss_clean(a);
 		return NULL;
 	}
-	return renderer;	
+	return renderer;
 }
 
 int kiss_clean(kiss_array *a)

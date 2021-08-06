@@ -3,14 +3,14 @@
 **
 **
 ** This program is free software; you can redistribute it and/or
-** modify it under the terms of version 2 of the GNU Library General 
+** modify it under the terms of version 2 of the GNU Library General
 ** Public License as published by the Free Software Foundation.
 **
-** This program is distributed in the hope that it will be useful, 
+** This program is distributed in the hope that it will be useful,
 ** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
-** Library General Public License for more details.  To obtain a 
-** copy of the GNU Library General Public License, write to the Free 
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+** Library General Public License for more details.  To obtain a
+** copy of the GNU Library General Public License, write to the Free
 ** Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 **
 ** Any permitted reproduction of these routines, in whole or in part,
@@ -120,7 +120,7 @@ static void build_address_handlers(nsf_t *nsf)
 
    memset(nsf_readhandler, 0, sizeof(nsf_readhandler));
    memset(nsf_writehandler, 0, sizeof(nsf_writehandler));
- 
+
    num_handlers = 0;
    for (count = 0; num_handlers < MAX_ADDRESS_HANDLERS; count++, num_handlers++)
    {
@@ -269,7 +269,7 @@ static void nsf_inittune(nsf_t *nsf)
    nsf->cur_frame_end = !nsf->song_frames
      ? 0
      : nsf->song_frames[nsf->current_song];
-   
+
    if (nsf->bankswitched)
    {
       /* the first hack of the NSF spec! */
@@ -301,7 +301,7 @@ static void nsf_inittune(nsf_t *nsf)
    /* determine PAL/NTSC compatibility shite */
    if (nsf->pal_ntsc_bits & NSF_DEDICATED_PAL)
       x_reg = 1;
-   else   
+   else
       x_reg = 0;
 
    /* execute 1 frame or so; let init routine run free */
@@ -392,7 +392,7 @@ int nsf_init(void)
 static int nsf_cpuinit(nsf_t *nsf)
 {
    int i;
-   
+
    nsf->cpu = malloc(sizeof(nes6502_context));
    if (NULL == nsf->cpu)
       return -1;
@@ -675,11 +675,11 @@ nsf_t * nsf_load_extended(struct nsf_loader_t * loader)
     uint8 size[4];  /* extension data size (this struct include) */
   } nsf_file_ext;
 
-  /* no loader ! */ 
+  /* no loader ! */
   if (!loader) {
     return NULL;
   }
-  
+
   /* Open the "file" */
   if (loader->open(loader) < 0) {
     return NULL;
@@ -716,7 +716,7 @@ nsf_t * nsf_load_extended(struct nsf_loader_t * loader)
    * first : the nsf struct
    */
   temp_nsf = malloc(sizeof(nsf_t));
-  
+
   if (NULL == temp_nsf) {
     log_printf("nsf : [%s] error allocating nsf header\n",
 	       loader->fname(loader));
@@ -843,7 +843,7 @@ nsf_t * nsf_load_extended(struct nsf_loader_t * loader)
       if (tsongs > songs) {
 	tsongs = songs;
       }
-      
+
       /* Copy time info. */
       for (i=0; i<tsongs; ++i) {
 	temp_nsf->song_frames[i] = 0
@@ -863,7 +863,7 @@ nsf_t * nsf_load_extended(struct nsf_loader_t * loader)
 	break;
     }
   }
-  
+
 
   /* Close "file" */
   loader->close(loader);
@@ -930,7 +930,7 @@ void nsf_free(nsf_t **pnsf)
       apu_destroy(nsf->apu);
 
     nes_shutdown(nsf);
-    
+
     if (nsf->data)
       free(nsf->data);
 
@@ -979,10 +979,10 @@ int nsf_playtrack(nsf_t *nsf, int track, int sample_rate, int sample_bits,
 
   /* go ahead and init all the read/write handlers */
   build_address_handlers(nsf);
-  
+
   /* convenience? */
   nsf->process = nsf->apu->process;
-  
+
   nes6502_setcontext(nsf->cpu);
 
   if (track > nsf->num_songs)
@@ -991,7 +991,7 @@ int nsf_playtrack(nsf_t *nsf, int track, int sample_rate, int sample_bits,
     track = 1;
 
   nsf->current_song = track;
-   
+
   apu_reset();
 
   nsf_inittune(nsf);

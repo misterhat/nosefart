@@ -3,14 +3,14 @@
 **
 **
 ** This program is free software; you can redistribute it and/or
-** modify it under the terms of version 2 of the GNU Library General 
+** modify it under the terms of version 2 of the GNU Library General
 ** Public License as published by the Free Software Foundation.
 **
-** This program is distributed in the hope that it will be useful, 
+** This program is distributed in the hope that it will be useful,
 ** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
-** Library General Public License for more details.  To obtain a 
-** copy of the GNU Library General Public License, write to the Free 
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+** Library General Public License for more details.  To obtain a
+** copy of the GNU Library General Public License, write to the Free
 ** Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 **
 ** Any permitted reproduction of these routines, in whole or in part,
@@ -76,13 +76,13 @@
 /* As much data as possible is precalculated,
 ** to keep the sample processing as lean as possible
 */
- 
+
 typedef struct rectangle_s
 {
    uint8 regs[4];
 
    boolean enabled;
-   
+
    int32 phaseacc;
    int32 freq;
    int32 output_vol;
@@ -174,7 +174,7 @@ typedef struct dmc_s
 
    /* bodge for timestamp queue */
    boolean enabled;
-   
+
    int32 freq;
    int32 phaseacc;
    int32 output_vol;
@@ -281,6 +281,7 @@ extern void apu_process(void *buffer, int num_samples);
 extern void apu_reset(void);
 extern int apu_setchan(int chan, boolean enabled);
 extern int32 apu_getcyclerate(void);
+extern void apu_setcontext(apu_t *src_apu);
 extern apu_t *apu_getcontext(void);
 
 extern uint8 apu_read(uint32 address);
