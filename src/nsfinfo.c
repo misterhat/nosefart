@@ -5,14 +5,14 @@
  * This program supports nsf playing time calculation extension.
  *
  * This program is free software; you can redistribute it and/or
- * modify it under the terms of version 2 of the GNU Library General 
+ * modify it under the terms of version 2 of the GNU Library General
  * Public License as published by the Free Software Foundation.
  *
- * This program is distributed in the hope that it will be useful, 
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
- * Library General Public License for more details.  To obtain a 
- * copy of the GNU Library General Public License, write to the Free 
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.  To obtain a
+ * copy of the GNU Library General Public License, write to the Free
  * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  * Any permitted reproduction of these routines, in whole or in part,
@@ -24,11 +24,11 @@
 	used to do playing time calculation without using ben's idea of
 	changing the NSF file format.  He wrote this as a stand-alone
 	program.  I have modified it so that the parts I want are called
-	from nosefart.  I also modified the calculation algorithm 
+	from nosefart.  I also modified the calculation algorithm
 	somewhat.
-	
+
 	For this to work, the changes he made to other files in this source
-	tree have been left alone.  Therefore, there may be references to 
+	tree have been left alone.  Therefore, there may be references to
 	the "NSF2" file format in the code, even though this version of
 	nosefart does not use it.
 */
@@ -113,7 +113,7 @@ static void info_show_help(void)
 	  " Works with tracks 1,5,4,5 and 6 in this order and will\n"
 	  " display `track:1 frames:2342' for all theses tracks.\n"
 	  "\n"
-	  "  `--1-0' loops over all tracks.\n" 
+	  "  `--1-0' loops over all tracks.\n"
 	  "\n"
 	  );
 }
@@ -121,9 +121,9 @@ static void info_show_help(void)
 static void msg(const char *fmt, ...)
 {
   va_list list;
-  if (quiet) 
+  if (quiet)
     return;
-  
+
   va_start(list, fmt);
   vfprintf(stderr, fmt, list);
   va_end(list);
@@ -233,8 +233,8 @@ static int nsf_playback_rate(nsf_t * nsf)
 {
   uint8 * p;
   unsigned int def, v;
-  
-  
+
+
   if (nsf->pal_ntsc_bits & NSF_DEDICATED_PAL) {
     p = (uint8*)&nsf->pal_speed;
     def = 50;
@@ -253,13 +253,13 @@ static unsigned int nsf_calc_time(nsf_t * src,
 {
   unsigned int result1 = 0, result2 = 0;
   nsf_t * nsf = 0;
-  float sec; 
+  float sec;
   unsigned int playback_rate = nsf_playback_rate(src);
   int err;
   unsigned int max_frag;
 
   // trouble with zelda2:7?
-  int default_frag_size = 20 * playback_rate; // 2 * 60 * playback_rate; 
+  int default_frag_size = 20 * playback_rate; // 2 * 60 * playback_rate;
 
   if (track < 0 || track > src->num_songs) {
     fprintf(stderr, "nsfinfo : calc time, track #%d out of range.\n", track);
@@ -303,14 +303,14 @@ static unsigned int nsf_calc_time(nsf_t * src,
     goto error;
   }
 
-  /* the way this works is that it finds the last place that new memory 
+  /* the way this works is that it finds the last place that new memory
      is accessed.  The time it takes to do this is the length of the song.
      Well, sorta.  It's the time after which no new material is played.
      If the song has an intro which is not repeated, it counts that as part
      of the length.  (And if a song goes A B C B B B B ..., it will be the
-     length of A B C.  I don't think I've encountered this, however, 
+     length of A B C.  I don't think I've encountered this, however,
      although I think it could happen.)
-     -matt s. 
+     -matt s.
   */
   {
     int done = 0;
@@ -318,7 +318,7 @@ static unsigned int nsf_calc_time(nsf_t * src,
 
     //msg("nsfinfo : Emulating up to %u frames (%d hz)\n", frame_frag, playback_rate);
 
-    while (!done) 
+    while (!done)
     {
       nsf_frame(nsf); /* advance one frame. -matt s. */
 
@@ -330,22 +330,22 @@ static unsigned int nsf_calc_time(nsf_t * src,
       }
       //msg("\n");
 
-      if (nsf->cur_frame > frame_frag) 
+      if (nsf->cur_frame > frame_frag)
       {
-        if (last_accessed_frame > prev_frag) 
+        if (last_accessed_frame > prev_frag)
         {
 	  prev_frag = nsf->cur_frame;
 	  frame_frag += default_frag_size;
 	  //msg("nsfinfo : memory was accessed, enlarging search to next %u frames\n",
 	  //    default_frag_size);
-	  
-          if (frame_frag >= max_frag) 
+
+          if (frame_frag >= max_frag)
           {
 	    msg("\nnsfinfo : unable to find end of music within %u frames, giving up!\n", max_frag);
 	    goto error;
 	  }
-	} 
-        else 
+	}
+        else
 	  done = 1;
       }
     }
@@ -359,7 +359,7 @@ static unsigned int nsf_calc_time(nsf_t * src,
   }
 
   /* clear out the memory access information.  This is a kludge
-     because I, matt s, don't totally understand what ben is doing! 
+     because I, matt s, don't totally understand what ben is doing!
      max_access information is collected in src/cpu/nes6502/nes6502.c */
   {
     int a;
@@ -375,14 +375,14 @@ static unsigned int nsf_calc_time(nsf_t * src,
   /* This finds the length of the song _without_ the intro. -matt s */
   {
     /* don't want to count what we've already looked at */
-    int starting_frame = nsf->cur_frame; 
+    int starting_frame = nsf->cur_frame;
 
     int done = 0;
     uint32 last_accessed_frame = 0, prev_frag = 0;
 
     //msg("nsfinfo : Emulating up to %u frames (%d hz)\n", frame_frag, playback_rate);
 
-    while (!done) 
+    while (!done)
     {
       nsf_frame(nsf); /* advance one frame. -matt s. */
 
@@ -394,22 +394,22 @@ static unsigned int nsf_calc_time(nsf_t * src,
       }
       //msg("\n");
 
-      if (nsf->cur_frame > frame_frag) 
+      if (nsf->cur_frame > frame_frag)
       {
-        if (last_accessed_frame > prev_frag) 
+        if (last_accessed_frame > prev_frag)
         {
 	  prev_frag = nsf->cur_frame;
 	  frame_frag += default_frag_size;
 	  //msg("nsfinfo : memory was accessed, enlarging search to next %u frames\n",
 	  //    default_frag_size);
-	  
-          if (frame_frag >= max_frag) 
+
+          if (frame_frag >= max_frag)
           {
 	    msg("\nnsfinfo : unable to find end of music within %u frames\n\tgiving up!", max_frag);
 	    goto error;
 	  }
-	} 
-        else 
+	}
+        else
 	  done = 1;
       }
     }
@@ -419,7 +419,7 @@ static unsigned int nsf_calc_time(nsf_t * src,
 //	track, result2, sec);
   }
 
-  /* Want to get both results back to nosefart.  Neither should be 
+  /* Want to get both results back to nosefart.  Neither should be
      larger than 2^16, so let's shove them together into one int.
      the high order bits are result1 (with intro) and the lower order
      bits are result2 (without intro) */
@@ -553,7 +553,7 @@ int nsf_info_main(int na, char **a)
   char *trackList, *trackListBase;
 
   static unsigned int times[256];
- 
+
   /* First loop search for --help, --warranty ,--quiet */
   for (i=1; i<na; ++i) {
     if (!strcmp(a[i],"--help")) {
@@ -799,50 +799,4 @@ int nsf_info_main(int na, char **a)
   }
   free (buffer);
   return (err < 0) ? 255 : 0;
-}
-
-void itoa(int n, char * res)
-{
-        if(n < 10)
-        {
-                res[0] = (char)(n) + '0';
-                res[1] = '\0';
-        }
-        else if(n < 100)
-        {
-                res[0] = (char)(n/10) + '0';
-                res[1] = (char)(n%10) + '0';
-                res[2] = '\0';
-        }
-        else if(n < 1000)
-        {
-                res[0] = (char)(n/100) + '0';
-                res[1] = (char)((n/10) % 10)+ '0';
-                res[2] = (char)(n%10) + '0';
-        }
-        else
-                fprintf(stderr, "I'm too dumb to handle numbers over 1000\n");  
-}
-
-/* returns an int whose top bits are the length with introduction
-   and bottom bits are the length without introduction */
-unsigned int time_info(char * filename, int track)
-{
-        char * argv[4];
-        char argv1[] = "--   ";
-        unsigned int frames, result, wintro, wointro;
-        char num[] = "   ";
-
-        itoa(track, num);
-
-        argv1[2] = num[0];
-        argv1[3] = num[1];
-        argv1[4] = num[2];
-
-        argv[0] = "nsfinfo";
-        argv[1] = filename;
-        argv[2] = argv1;
-        argv[3] = "--AT";
-
-        return nsf_info_main(4, argv);
 }
