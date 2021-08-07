@@ -1,8 +1,8 @@
 CC = emcc
 CFLAGS =
-LDFLAGS = -lm -lSDL2 -lSDL2_ttf
+LDFLAGS = -lm -lSDL2 -lSDL2_ttf -s ALLOW_MEMORY_GROWTH=1
 PREFIX = /usr
-WANT_DEBUG=TRUE
+WANT_DEBUG=FALSE
 
 NAME = nosefart
 VERSION = 3.0.0

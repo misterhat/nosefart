@@ -1,1 +1,1 @@
-Module['arguments'] = ['./nsfs/castlevania.nsf'];
+Module['arguments'] = ['./nsfs/smb3.nsf'];
