@@ -238,6 +238,31 @@ static void nsf_displayinfo(void) {
     fflush(stdout);
 }
 
+static void nsf_displaysonglengths(char *filename) {
+    printf("Approximated Song Lengths:\n");
+    printf("intro frames / seconds | loop frames / seconds\n");
+
+    int inforesult, intro_frames, loop_frames;
+    double intro_seconds, loop_seconds;
+    for (int i = 1; i <= nsf->num_songs; i++) {
+        inforesult = time_info(filename, i);
+
+        loop_frames = inforesult % 0x1000;
+        intro_frames = (inforesult / 0x1000) - loop_frames;
+
+        loop_seconds = (double)loop_frames / nsf->playback_rate;
+        intro_seconds = (double)intro_frames / nsf->playback_rate;
+
+        int frames = get_time(0, filename, i);
+        double seconds = (double)frames / nsf->playback_rate;
+
+        printf("%12d %9.2f | %11d %9.2f\n", intro_frames, intro_seconds,
+               loop_frames, loop_seconds);
+    }
+
+    fflush(stdout);
+}
+
 /* handle keypresses */
 static int nsf_handlekey(char ch, int doautocalc, char *filename, int reps) {
     ch = tolower(ch);
@@ -558,6 +583,7 @@ int main(int argc, char **argv) {
 
     if (justdisplayinfo) {
         nsf_displayinfo();
+        nsf_displaysonglengths(filename);
     } else if (dumpwav) {
         init_buffer();
 
