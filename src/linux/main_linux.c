@@ -569,9 +569,9 @@ int main(int argc, char **argv) {
 
         mkdir(dumpwavdir, 0777);
 
-        const int last_song = track_specified ? track+1 : nsf->num_songs;
+        const int last_song = track_specified ? track : nsf->num_songs;
 
-        for (int i = track; i < last_song; i++) {
+        for (int i = track; i <= last_song; i++) {
             nsf->current_song = i;
 
             // 3 digits, WAV extension, slash, dot and NULL
